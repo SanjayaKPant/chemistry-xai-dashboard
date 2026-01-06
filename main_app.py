@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 
 st.set_page_config(page_title="XAI Chem-DKT Dashboard", layout="wide")
 
@@ -23,36 +24,44 @@ with tab1:
     st.info("The Misconception Heatmap will appear in this section on Day 7.")
 
 with tab2:
-    # 4. Data Loading Logic (NOW PROPERLY INDENTED)
     try:
+        # --- DATA LOADING ---
         df = pd.read_csv("mock_data.csv")
         filtered_df = df[df["Topic"] == topic]
         cbw_students = filtered_df[(filtered_df["Confidence_Level"] >= confidence_threshold) & (filtered_df["Score"] < 50)]
 
+        # --- TABLES SECTION ---
         col1, col2 = st.columns(2)
         with col1:
             st.subheader("📋 Student Overview")
             st.dataframe(filtered_df, use_container_width=True)
         with col2:
-           import plotly.express as px
+            st.subheader("🚨 Critical Misconceptions")
+            if not cbw_students.empty:
+                st.error(f"Found {len(cbw_students)} student(s) at risk!")
+                st.table(cbw_students[["Student_ID", "Score", "Confidence_Level"]])
+            else:
+                st.success("No 'Confident but Wrong' cases found.")
 
-st.divider()
-st.subheader("🔥 Misconception Heatmap: Confidence vs. Score")
+        # --- HEATMAP SECTION (MOVED INSIDE THE TRY BLOCK) ---
+        st.divider()
+        st.subheader("🔥 Misconception Heatmap: Confidence vs. Score")
 
-# Create a scatter plot that acts as a heatmap
-fig = px.scatter(
-    filtered_df, 
-    x="Score", 
-    y="Confidence_Level",
-    color="Score",
-    text="Student_ID",
-    size_max=60,
-    labels={"Confidence_Level": "Confidence (%)", "Score": "Knowledge Score"},
-    color_continuous_scale="RdYlGn" # Red-Yellow-Green scale
-)
+        fig = px.scatter(
+            filtered_df, 
+            x="Score", 
+            y="Confidence_Level",
+            color="Score",
+            text="Student_ID",
+            size_max=60,
+            labels={"Confidence_Level": "Confidence (%)", "Score": "Knowledge Score"},
+            color_continuous_scale="RdYlGn"
+        )
 
-# Add a "Danger Zone" line for misconceptions
-fig.add_hline(y=confidence_threshold, line_dash="dash", line_color="red", annotation_text="High Confidence")
-fig.add_vline(x=50, line_dash="dash", line_color="red", annotation_text="Low Knowledge")
+        fig.add_hline(y=confidence_threshold, line_dash="dash", line_color="red", annotation_text="High Confidence")
+        fig.add_vline(x=50, line_dash="dash", line_color="red", annotation_text="Low Knowledge")
+        
+        st.plotly_chart(fig, use_container_width=True)
 
-st.plotly_chart(fig, use_container_width=True)
+    except FileNotFoundError:
+        st.warning("Please ensure 'mock_data.csv' is uploaded to GitHub.")
