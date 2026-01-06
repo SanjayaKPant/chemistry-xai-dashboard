@@ -25,3 +25,24 @@ st.write(f"Currently showing students who hold misconceptions with a confidence 
 
 # A placeholder for our future heatmap
 st.info("The Misconception Heatmap will appear below this section on Day 7.")
+
+
+import pandas as pd
+
+# Load the data we just created
+df = pd.read_csv("mock_data.csv")
+
+# Filter data based on the sidebar selection you built
+filtered_df = df[df["Topic"] == topic]
+
+st.subheader(f"Data Preview for {topic}")
+st.write(filtered_df)
+
+# Logic to highlight "Confident but Wrong" students
+high_confidence_issues = filtered_df[(filtered_df["Confidence_Level"] >= confidence_threshold) & (filtered_df["Score"] < 50)]
+
+if not high_confidence_issues.empty:
+    st.warning(f"⚠️ Found {len(high_confidence_issues)} student(s) with high confidence but low scores in {topic}.")
+    st.dataframe(high_confidence_issues)
+else:
+    st.success("No critical misconceptions detected at this threshold.")
