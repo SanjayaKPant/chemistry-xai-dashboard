@@ -34,11 +34,25 @@ with tab2:
             st.subheader("📋 Student Overview")
             st.dataframe(filtered_df, use_container_width=True)
         with col2:
-            st.subheader("🚨 Critical Misconceptions")
-            if not cbw_students.empty:
-                st.error(f"Found {len(cbw_students)} student(s) at risk!")
-                st.table(cbw_students[["Student_ID", "Score", "Confidence_Level"]])
-            else:
-                st.success("No 'Confident but Wrong' cases found.")
-    except FileNotFoundError:
-        st.warning("Please ensure 'mock_data.csv' is uploaded to GitHub.")
+           import plotly.express as px
+
+st.divider()
+st.subheader("🔥 Misconception Heatmap: Confidence vs. Score")
+
+# Create a scatter plot that acts as a heatmap
+fig = px.scatter(
+    filtered_df, 
+    x="Score", 
+    y="Confidence_Level",
+    color="Score",
+    text="Student_ID",
+    size_max=60,
+    labels={"Confidence_Level": "Confidence (%)", "Score": "Knowledge Score"},
+    color_continuous_scale="RdYlGn" # Red-Yellow-Green scale
+)
+
+# Add a "Danger Zone" line for misconceptions
+fig.add_hline(y=confidence_threshold, line_dash="dash", line_color="red", annotation_text="High Confidence")
+fig.add_vline(x=50, line_dash="dash", line_color="red", annotation_text="Low Knowledge")
+
+st.plotly_chart(fig, use_container_width=True)
