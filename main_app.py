@@ -6,7 +6,7 @@ st.sidebar.header("Dashboard Filters")
 # 1. Selectbox for Chemistry Topics (From your Knowledge Graph)
 topic = st.sidebar.selectbox(
     "Select Chemistry Topic:",
-    ["Periodic Table", Chemical Reaction", "Acids & Bases", "Atomic Structure", "Chemical Bonding"]
+    ["Periodic Table", "Chemical Reaction", "Acids & Bases", "Atomic Structure", "Chemical Bonding"]
 )
 
 # 2. Slider for Confidence (Linking to your Tier 3 Diagnostic)
