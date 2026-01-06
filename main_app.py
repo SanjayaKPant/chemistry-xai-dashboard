@@ -15,6 +15,16 @@ confidence_threshold = st.sidebar.slider("Confidence Threshold (%)", 0, 100, 75)
 st.title("🧪 XAI Misconception Diagnostic")
 st.markdown(f"**Analyzing:** {topic} | **Threshold:** {confidence_threshold}%")
 
+# Create two tabs
+tab1, tab2 = st.tabs(["🏠 Research Overview", "🧪 Misconception Diagnostic"])
+
+with tab1:
+    st.header("Project Welcome")
+    st.write("This dashboard analyzes Chemistry DKT data from schools in Nepal.")
+
+with tab2:
+    # Move your existing table and alert code here!
+
 # 3. Data Loading Logic
 try:
     df = pd.read_csv("mock_data.csv")
