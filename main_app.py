@@ -149,18 +149,33 @@ def show_admin():
         
     st.download_button("Download CSV for SPSS/R", "data.csv", "text/csv")
 
-# --- MAIN NAVIGATION ROUTING ---
+# --- MAIN NAVIGATION ROUTING (Corrected) ---
 if not st.session_state.logged_in:
     show_login()
 else:
-    # Sidebar Navigation based on Role
+    # 1. Safely extract user info from the session state
+    user_info = st.session_state.user_data
+    role = user_info.get('Role', 'Student') # Default to Student if not found
+    group = user_info.get('Group', 'Control')
+    
+    # 2. Build Sidebar Navigation
+    st.sidebar.title("🔬 Research Menu")
+    st.sidebar.write(f"Logged in as: **{user_info.get('Name')}**")
+    
     pages = ["Home", "Course Content", "4-Tier Quiz"]
-    if st.session_state.user_role in ["Admin", "Supervisor"]:
+    
+    # 3. Add Admin/Supervisor pages only if they have the right role
+    if role in ["Admin", "Supervisor"]:
         pages.append("Admin Dashboard")
     
-    choice = st.sidebar.selectbox("Navigation", pages)
+    choice = st.sidebar.selectbox("Go to:", pages)
     
-    if choice == "Home": show_home()
-    elif choice == "Course Content": show_course()
-    elif choice == "4-Tier Quiz": show_quiz()
-    elif choice == "Admin Dashboard": show_admin()
+    # 4. Display the chosen page
+    if choice == "Home": 
+        show_home()
+    elif choice == "Course Content": 
+        show_course()
+    elif choice == "4-Tier Quiz": 
+        show_quiz()
+    elif choice == "Admin Dashboard": 
+        show_admin()
