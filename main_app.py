@@ -12,12 +12,23 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 # --- SESSION STATE INITIALIZATION ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
-if 'user_role' not in st.session_state:
-    st.session_state.user_role = None
-if 'user_group' not in st.session_state:
-    st.session_state.user_group = None
-if 'user_id' not in st.session_state:
-    st.session_state.user_id = None
+    st.session_state.user_data = None # Store the whole row of user info
+
+# --- NEW: DATABASE AUTHENTICATION FUNCTION ---
+def authenticate_user(user_id):
+    try:
+        # Read the Participants sheet
+        users_df = conn.read(worksheet="Participants")
+        
+        # Look for the user_id in the first column
+        user_row = users_df[users_df['User_ID'] == user_id]
+        
+        if not user_row.empty:
+            return user_row.iloc[0].to_dict() # Return user details as a dictionary
+        return None
+    except Exception as e:
+        st.error(f"Auth Error: {e}")
+        return None
 
 # --- MOCK MASTER LIST (In future, pull this from a 'Users' tab in your GSheet) ---
 # Roles: 'Admin', 'Supervisor', 'Teacher', 'Student'
@@ -42,22 +53,22 @@ def save_response(data_dict):
         st.error(f"Database Error: {e}")
         return False
 
-# --- PAGE: LOGIN ---
+# --- UPDATED LOGIN PAGE ---
 def show_login():
-    st.title("🇳🇵 AI-Integration in Chemistry Research")
-    st.subheader("Participant Access Portal")
+    st.title("🇳🇵 PhD Research: AI in Chemistry")
+    st.subheader("Login with your Research ID")
     
     with st.container(border=True):
-        user_id = st.text_input("Enter your Unique Research ID:")
-        if st.button("Access Dashboard"):
-            if user_id in USER_DB:
+        input_id = st.text_input("Research ID:", placeholder="e.g. S001")
+        if st.button("Enter Portal"):
+            user_info = authenticate_user(input_id)
+            if user_info:
                 st.session_state.logged_in = True
-                st.session_state.user_id = user_id
-                st.session_state.user_role = USER_DB[user_id]['role']
-                st.session_state.user_group = USER_DB[user_id]['group']
+                st.session_state.user_data = user_info
+                st.success(f"Welcome back, {user_info['Name']}!")
                 st.rerun()
             else:
-                st.error("ID not found. Please contact the researcher.")
+                st.error("Access Denied: ID not found in the research database.")
 
 # --- PAGE: HOME (Welcome & Ethics) ---
 def show_home():
