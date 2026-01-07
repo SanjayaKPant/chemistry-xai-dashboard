@@ -1,67 +1,44 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-import plotly.express as px
+from datetime import datetime
 
-st.set_page_config(page_title="XAI Chem-DKT Dashboard", layout="wide")
+st.title("🇳🇵 Research Database Connection Test")
 
-# 1. Sidebar Configuration
-st.sidebar.header("Research Parameters")
-topic = st.sidebar.selectbox(
-    "Select Chemistry Topic:",
-    ["Periodic Table", "Chemical Reaction", "Acids & Bases", "Atomic Structure", "Chemical Bonding"]
-)
-confidence_threshold = st.sidebar.slider("Confidence Threshold (%)", 0, 100, 75)
+# 1. Establish Connection
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. Main Title
-st.title("🧪 XAI Misconception Diagnostic")
+# 2. Test Writing Data
+st.header("Step 1: Write to Database")
+test_id = st.text_input("Enter a Test Student ID (e.g., TEST_001):")
 
-# 3. Create Tabs
-tab1, tab2 = st.tabs(["🏠 Research Overview", "📊 Diagnostic Tool"])
+if st.button("Send Test Data"):
+    if test_id:
+        # Create a new row of data
+        new_data = pd.DataFrame([{
+            "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "Student_ID": test_id,
+            "Group": "Pilot_Test",
+            "School": "VPS_Lab",
+            "Tier_1_Ans": "Connection Successful",
+            "Tier_2_Conf": 100,
+            "Tier_3_Reason": "System Test",
+            "Tier_4_ReasonConf": 100
+        }])
 
-with tab1:
-    st.header("Project Welcome")
-    st.write("This dashboard analyzes Chemistry DKT data from schools in Nepal.")
-    st.info("The Misconception Heatmap will appear in this section on Day 7.")
-
-with tab2:
-    try:
-        # --- DATA LOADING ---
-        df = pd.read_csv("mock_data.csv")
-        filtered_df = df[df["Topic"] == topic]
-        cbw_students = filtered_df[(filtered_df["Confidence_Level"] >= confidence_threshold) & (filtered_df["Score"] < 50)]
-
-        # --- TABLES SECTION ---
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("📋 Student Overview")
-            st.dataframe(filtered_df, use_container_width=True)
-        with col2:
-            st.subheader("🚨 Critical Misconceptions")
-            if not cbw_students.empty:
-                st.error(f"Found {len(cbw_students)} student(s) at risk!")
-                st.table(cbw_students[["Student_ID", "Score", "Confidence_Level"]])
-            else:
-                st.success("No 'Confident but Wrong' cases found.")
-
-        # --- HEATMAP SECTION (MOVED INSIDE THE TRY BLOCK) ---
-        st.divider()
-        st.subheader("🔥 Misconception Heatmap: Confidence vs. Score")
-
-        fig = px.scatter(
-            filtered_df, 
-            x="Score", 
-            y="Confidence_Level",
-            color="Score",
-            text="Student_ID",
-            size_max=60,
-            labels={"Confidence_Level": "Confidence (%)", "Score": "Knowledge Score"},
-            color_continuous_scale="RdYlGn"
-        )
-
-        fig.add_hline(y=confidence_threshold, line_dash="dash", line_color="red", annotation_text="High Confidence")
-        fig.add_vline(x=50, line_dash="dash", line_color="red", annotation_text="Low Knowledge")
+        # Pull existing data and append
+        existing_data = conn.read(worksheet="Responses")
+        updated_df = pd.concat([existing_data, new_data], ignore_index=True)
         
-        st.plotly_chart(fig, use_container_width=True)
+        # Update the Google Sheet
+        conn.update(worksheet="Responses", data=updated_df)
+        st.success(f"Successfully recorded {test_id} in Google Sheets!")
+    else:
+        st.error("Please enter an ID first.")
 
-    except FileNotFoundError:
-        st.warning("Please ensure 'mock_data.csv' is uploaded to GitHub.")
+# 3. Test Reading Data
+st.divider()
+st.header("Step 2: Read from Database")
+if st.button("Refresh Data View"):
+    df = conn.read(worksheet="Responses")
+    st.dataframe(df)
