@@ -72,21 +72,26 @@ def show_login():
 
 # --- PAGE: HOME (Welcome & Ethics) ---
 def show_home():
-    st.header(f"Welcome, {USER_DB[st.session_state.user_id]['name']}")
-    st.write(f"**Group:** {st.session_state.user_group} | **Role:** {st.session_state.user_role}")
+    # Use st.session_state.user_data instead of USER_DB
+    user = st.session_state.user_data
+    st.header(f"Welcome, {user.get('Name', 'Participant')}")
+    st.write(f"**Research Group:** {user.get('Group', 'Not Assigned')}")
+    st.write(f"**Your Role:** {user.get('Role', 'Student')}")
     
     st.markdown("""
-    ### Research Overview
-    This PhD study explores the impact of AI-integrated scaffolding on understanding **Chemical Bonding**.
+    ---
+    ### 📜 Research Participant Information
+    This study investigates how AI-integrated scaffolding helps clarify misconceptions in **Atomic Structure and Chemical Bonding**.
     
-    **Instructions:**
-    1. Complete the assigned lessons in order.
-    2. Answer all 4-tier diagnostic questions honestly.
-    3. Do not refresh the page during a quiz.
+    **Your Privacy:**
+    * All data is stored securely in a PhD-monitored database.
+    * Your unique ID is used to track progress across 5 sub-lessons.
+    * You can withdraw from the study at any time.
     """)
     
-    if st.button("Logout"):
+    if st.sidebar.button("Logout"):
         st.session_state.logged_in = False
+        st.session_state.user_data = None
         st.rerun()
 
 # --- PAGE: AI-INTEGRATED COURSE ---
@@ -142,12 +147,22 @@ def show_quiz():
 
 # --- PAGE: ADMIN & SUPERVISOR ---
 def show_admin():
-    st.header("📊 Research Management Console")
-    if st.button("Refresh Master Data"):
-        df = conn.read(worksheet="Responses")
-        st.dataframe(df)
-        
-    st.download_button("Download CSV for SPSS/R", "data.csv", "text/csv")
+    st.header("📊 PhD Research Management Console")
+    st.info("Direct Access for Lead Researcher and Supervisors")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("👁️ View Participant List"):
+            participants = conn.read(worksheet="Participants")
+            st.dataframe(participants)
+            
+    with col2:
+        if st.button("📥 Download Research Data"):
+            responses = conn.read(worksheet="Responses")
+            st.dataframe(responses)
+            # Standard CSV export for SPSS/R analysis
+            csv = responses.to_csv(index=False).encode('utf-8')
+            st.download_button("Download for Statistical Analysis", data=csv, file_name="chemistry_research_data.csv", mime='text/csv')
 
 # --- MAIN NAVIGATION ROUTING (Corrected) ---
 if not st.session_state.logged_in:
