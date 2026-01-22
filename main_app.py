@@ -3,6 +3,32 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
 
+# --- DATABASE VALIDATOR (PhD INTEGRITY LAYER) ---
+def validate_database_structure(conn):
+    """
+    Ensures the Google Sheet is healthy and ready for PhD-grade data.
+    If headers are missing, the app stops to prevent corrupted data collection.
+    """
+    required_tabs = {
+        "Participants": ["User_ID", "Name", "Role", "Group"],
+        "Responses": ["Timestamp", "User_ID", "Lesson", "Tier_1", "Tier_2", "Tier_3", "Tier_4"]
+    }
+    
+    for tab, required_columns in required_tabs.items():
+        try:
+            # Live check of the spreadsheet headers
+            df = conn.read(worksheet=tab, ttl=0)
+            missing = [col for col in required_columns if col not in df.columns]
+            
+            if missing:
+                st.error(f"❌ DATABASE ERROR: Tab '{tab}' is missing columns: {missing}")
+                st.info("PhD Supervisor Note: Please fix your Google Sheet headers before proceeding.")
+                st.stop()
+                
+        except Exception:
+            st.error(f"⚠️ CONNECTION ERROR: Cannot find tab '{tab}' in your Google Sheet.")
+            st.stop()
+
 # --- CONFIGURATION & STYLING ---
 st.set_page_config(page_title="AI-Chem Research Portal", layout="wide")
 
@@ -72,8 +98,9 @@ def show_login():
 
 # --- PAGE: HOME (Welcome & Ethics) ---
 def show_home():
-    # Use st.session_state.user_data instead of USER_DB
+    # Fetching data from the session state (populated during login)
     user = st.session_state.user_data
+    
     st.header(f"Welcome, {user.get('Name', 'Participant')}")
     st.write(f"**Research Group:** {user.get('Group', 'Not Assigned')}")
     st.write(f"**Your Role:** {user.get('Role', 'Student')}")
@@ -81,12 +108,11 @@ def show_home():
     st.markdown("""
     ---
     ### 📜 Research Participant Information
-    This study investigates how AI-integrated scaffolding helps clarify misconceptions in **Atomic Structure and Chemical Bonding**.
+    This study investigates how AI-integrated scaffolding helps clarify misconceptions in **Atomic Structure**.
     
     **Your Privacy:**
-    * All data is stored securely in a PhD-monitored database.
-    * Your unique ID is used to track progress across 5 sub-lessons.
-    * You can withdraw from the study at any time.
+    * Data is anonymized for PhD research purposes.
+    * You can withdraw at any time.
     """)
     
     if st.sidebar.button("Logout"):
