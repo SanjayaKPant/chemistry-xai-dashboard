@@ -51,16 +51,17 @@ def show_home():
         st.session_state.logged_in = False
         st.rerun()
 
+# Import the new function at the top of main_app.py
+from database_manager import save_temporal_traces
+
 def show_quiz():
-    st.header("📝 Diagnostic Assessment")
-    user = st.session_state.user_data
-    with st.form("quiz_form"):
-        t1 = st.radio("Question 1: Atomic Structure", ["Nucleus", "Electron Cloud"])
-        t3 = st.text_area("Reasoning:")
-        if st.form_submit_button("Submit"):
-            log_temporal_trace("QUIZ_SUBMITTED", details=t1)
-            # Logic to call save_research_data goes here
-            st.success("Responses recorded.")
+    # ... existing quiz code ...
+    if submitted:
+        # Save the actual quiz answers
+        if save_response(data): 
+            # NOW: Sync the temporal traces to Google Drive
+            save_temporal_traces(conn, st.session_state.trace_buffer)
+            st.success("Quiz and Temporal Traces synced to Google Drive!")
 
 # --- 4. MAIN NAVIGATION ROUTING ---
 if not st.session_state.logged_in:
