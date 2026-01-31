@@ -54,20 +54,42 @@ def show_home():
 from database_manager import save_temporal_traces
 
 def show_quiz():
-    st.header("📝 Chemistry Diagnostic")
+    st.header("📝 Chemistry Diagnostic: Atomic Structure")
     
-    # 1. Capture the initial thought
-    t1 = st.radio("Where are electrons primarily located?", 
-                  ["Select...", "Nucleus", "Electron Cloud"], key="q1")
+    # Tier 1: Content Knowledge
+    t1 = st.radio("**Tier 1:** Where are electrons primarily located?", 
+                  ["Select...", "Inside the Nucleus", "In the Electron Cloud"], key="t1")
     
+    # --- AGENTIC INTERVENTION (The Socratic Trigger) ---
     if t1 != "Select...":
-        # Call the Socratic Engine
         hint = get_agentic_hint("atom_structure_01", t1)
-        
         if hint:
             st.info(f"🤖 **AI Tutor:** {hint}")
             log_temporal_trace("HINT_VIEWED", details=t1)
-    
+
+    # Tier 2: Confidence (Likert Scale)
+    t2 = st.select_slider("**Tier 2:** How confident are you in your answer?", 
+                          options=["Not Confident", "Somewhat", "Confident", "Very Confident"])
+
+    # Tier 3: Scientific Reasoning (The XAI Core)
+    t3 = st.text_area("**Tier 3:** Explain the scientific reasoning behind your choice:")
+
+    # Tier 4: Confidence in Reasoning
+    t4 = st.select_slider("**Tier 4:** How confident are you in this explanation?", 
+                          options=["Not Confident", "Somewhat", "Confident", "Very Confident"])
+
+    if st.button("Submit Final Response"):
+        # Combine all tiers into a single data record
+        quiz_data = {
+            "Timestamp": datetime.now().isoformat(),
+            "User_ID": st.session_state.user_data['User_ID'],
+            "Tier_1": t1, "Tier_2": t2, "Tier_3": t3, "Tier_4": t4
+        }
+        
+        if save_quiz_responses(conn, quiz_data):
+            save_temporal_traces(conn, st.session_state.trace_buffer)
+            st.success("✅ Assessment Data and Temporal Traces Recorded!")
+            
     # 2. Final Reasoning
     t3 = st.text_area("Reflecting on the hint (if any), explain your final choice:")
     
