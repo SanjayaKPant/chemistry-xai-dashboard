@@ -1,24 +1,25 @@
 import streamlit as st
 import pandas as pd
 
-def save_temporal_traces(conn, trace_buffer):
-    """Pushes local session traces to the 'Temporal_Traces' Google Sheet tab."""
-    if not trace_buffer:
-        return False
+def save_research_data(conn, responses_df, traces_df):
+    """
+    The Master Sync Function for PhD Research.
+    Saves both static quiz answers and temporal process traces.
+    """
     try:
-        # 1. Convert the list of traces to a DataFrame
-        new_traces_df = pd.DataFrame(trace_buffer)
+        # 1. Sync Static Responses
+        existing_res = conn.read(worksheet="Responses", ttl=0)
+        updated_res = pd.concat([existing_res, responses_df], ignore_index=True)
+        conn.update(worksheet="Responses", data=updated_res)
         
-        # 2. Read the existing sheet to avoid overwriting
+        # 2. Sync Temporal Traces (Crucial for Theme 9)
         existing_traces = conn.read(worksheet="Temporal_Traces", ttl=0)
+        updated_traces = pd.concat([existing_traces, traces_df], ignore_index=True)
+        conn.update(worksheet="Temporal_Traces", data=updated_traces)
         
-        # 3. Combine and Update
-        updated_df = pd.concat([existing_traces, new_traces_df], ignore_index=True)
-        conn.update(worksheet="Temporal_Traces", data=updated_df)
-        
-        # 4. Clear the buffer so we don't save duplicates
+        # Clear local buffer after successful cloud sync
         st.session_state.trace_buffer = []
         return True
     except Exception as e:
-        st.error(f"Failed to sync traces to Google Drive: {e}")
+        st.error(f"❌ Database Sync Failed: {e}")
         return False
