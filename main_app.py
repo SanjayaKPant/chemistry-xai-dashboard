@@ -62,7 +62,7 @@ def show_quiz():
             # NOW: Sync the temporal traces to Google Drive
             save_temporal_traces(conn, st.session_state.trace_buffer)
             st.success("Quiz and Temporal Traces synced to Google Drive!")
-
+            
 # --- 4. MAIN NAVIGATION ROUTING ---
 if not st.session_state.logged_in:
     show_login()
