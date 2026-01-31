@@ -1,26 +1,27 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px # Add this to requirements.txt
+import plotly.express as px
+from database_manager import save_temporal_traces # This is the bridge to GSheets
 
 def show_admin_portal(conn):
     st.title("📊 Researcher Management Console")
     
-    # --- RESEARCH METRICS ---
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Live Temporal Analytics")
-        # Load the traces we saw in the export
-        traces = conn.read(worksheet="Temporal_Traces", ttl=0)
-        
-        if not traces.empty:
-            # Calculate time spent per event
-            fig = px.timeline(traces, x_start="Timestamp", x_end="Timestamp", y="Event", color="User_ID")
-            st.plotly_chart(fig, use_container_width=True)
-            
+    # Check if there is data waiting to be saved
+    buffer_size = len(st.session_state.get('trace_buffer', []))
+    st.info(f"Current session has **{buffer_size}** unsynced traces.")
 
-    with col2:
-        st.subheader("Data Export")
-        if st.button("📥 Sync and Download All Traces"):
-            csv = traces.to_csv(index=False).encode('utf-8')
-            st.download_button("Download CSV for ProM/Disco", data=csv, file_name="research_traces.csv")
+    if st.button("🚀 Push Traces to Google Drive"):
+        if buffer_size > 0:
+            # This calls the function that actually writes to your Drive
+            success = save_temporal_traces(conn, st.session_state.trace_buffer)
+            if success:
+                st.success("Successfully synced to Google Drive!")
+        else:
+            st.warning("No new data to sync.")
+
+    st.divider()
+    
+    # View what is already in the Drive
+    if st.checkbox("Show Live Data from Drive"):
+        live_data = conn.read(worksheet="Temporal_Traces", ttl=0)
+        st.dataframe(live_data)
