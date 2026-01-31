@@ -54,21 +54,26 @@ def show_home():
 from database_manager import save_temporal_traces
 
 def show_quiz():
-    st.header("📝 Diagnostic Assessment")
-    user = st.session_state.user_data
+    st.header("📝 Chemistry Diagnostic")
     
-    # Track the start of the quiz for Temporal Traces
-    if 'quiz_start' not in st.session_state:
-        st.session_state.quiz_start = datetime.now().isoformat()
-        log_temporal_trace("QUIZ_STARTED")
-
-    with st.form("quiz_form"):
-        st.write("### Lesson 1: Atomic Foundations")
-        t1 = st.radio("Where are electrons primarily located?", ["Nucleus", "Electron Cloud"])
-        t3 = st.text_area("Explain your reasoning for the answer above:")
+    # 1. Capture the initial thought
+    t1 = st.radio("Where are electrons primarily located?", 
+                  ["Select...", "Nucleus", "Electron Cloud"], key="q1")
+    
+    if t1 != "Select...":
+        # Call the Socratic Engine
+        hint = get_agentic_hint("atom_structure_01", t1)
         
-        # FIX: Assign the button result to 'submitted' right here
-        submitted = st.form_submit_button("Submit Response")
+        if hint:
+            st.info(f"🤖 **AI Tutor:** {hint}")
+            log_temporal_trace("HINT_VIEWED", details=t1)
+    
+    # 2. Final Reasoning
+    t3 = st.text_area("Reflecting on the hint (if any), explain your final choice:")
+    
+    if st.button("Submit Final Answer"):
+        # ... your existing save logic ...
+        st.success("Data Captured!")
 
     # Now 'submitted' is defined and safe to check
     if submitted:
