@@ -3,12 +3,11 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
 
-# --- 1. IMPORT MODULAR RESEARCH FILES ---
-# Ensure these files exist in your GitHub repository
+# At the top of main_app.py
 try:
     from research_engine import log_temporal_trace, get_agentic_hint
     from admin_dashboard import show_admin_portal
-    from database_manager import save_research_data
+    from database_manager import save_temporal_traces, save_quiz_responses
 except ImportError as e:
     st.error(f"❌ Critical Error: Missing Research Modules. {e}")
     st.stop()
