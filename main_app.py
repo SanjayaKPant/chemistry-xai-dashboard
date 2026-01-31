@@ -54,13 +54,40 @@ def show_home():
 from database_manager import save_temporal_traces
 
 def show_quiz():
-    # ... existing quiz code ...
+    st.header("📝 Diagnostic Assessment")
+    user = st.session_state.user_data
+    
+    # Track the start of the quiz for Temporal Traces
+    if 'quiz_start' not in st.session_state:
+        st.session_state.quiz_start = datetime.now().isoformat()
+        log_temporal_trace("QUIZ_STARTED")
+
+    with st.form("quiz_form"):
+        st.write("### Lesson 1: Atomic Foundations")
+        t1 = st.radio("Where are electrons primarily located?", ["Nucleus", "Electron Cloud"])
+        t3 = st.text_area("Explain your reasoning for the answer above:")
+        
+        # FIX: Assign the button result to 'submitted' right here
+        submitted = st.form_submit_button("Submit Response")
+
+    # Now 'submitted' is defined and safe to check
     if submitted:
-        # Save the actual quiz answers
-        if save_response(data): 
-            # NOW: Sync the temporal traces to Google Drive
+        log_temporal_trace("QUIZ_SUBMITTED", details=t1) # Capture specific tiers
+        
+        # Prepare data for Google Sheets
+        quiz_data = {
+            "Timestamp": datetime.now().isoformat(),
+            "User_ID": user['User_ID'],
+            "Tier_1": t1,
+            "Tier_3": t3
+        }
+        
+        # Use the modular database manager to save
+        if save_quiz_responses(conn, quiz_data):
             save_temporal_traces(conn, st.session_state.trace_buffer)
-            st.success("Quiz and Temporal Traces synced to Google Drive!")
+            st.success("✅ Research data synced successfully!")
+        else:
+            st.error("❌ Sync failed. Please contact the researcher.")
             
 # --- 4. MAIN NAVIGATION ROUTING ---
 if not st.session_state.logged_in:
