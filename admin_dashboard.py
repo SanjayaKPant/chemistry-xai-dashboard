@@ -1,7 +1,9 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from database_manager import save_temporal_traces # This is the bridge to GSheets
+from database_manager import save_temporal_traces 
+
+# This is the bridge to GSheets
 
 def show_admin_portal(conn):
     st.title("📊 Researcher Management Console")
