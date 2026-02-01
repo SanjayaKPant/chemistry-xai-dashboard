@@ -17,9 +17,8 @@ if 'trace_buffer' not in st.session_state:
 # --- 2. AUTHENTICATION LOGIC ---
 def check_login(user_id):
     try:
-        # Use the connection defined at the top of database_manager.py
-        # This automatically pulls the URL from your [gsheets] secrets
-        df = conn.read(ttl=0) 
+        # Pass the secret URL directly to the read function
+df = conn.read(spreadsheet=st.secrets["gsheets"]["public_gsheets_url"], ttl=0)
         
         user_row = df[df['User_ID'] == user_id]
         
