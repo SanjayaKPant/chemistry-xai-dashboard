@@ -8,7 +8,8 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def save_quiz_responses(conn, data_dict):
     try:
         df = pd.DataFrame([data_dict])
-        conn.create(
+        # Use .update instead of .create to avoid the 400 error
+        conn.update(
             spreadsheet=st.secrets["gsheets"]["spreadsheet"],
             worksheet="Responses", 
             data=df
@@ -18,23 +19,13 @@ def save_quiz_responses(conn, data_dict):
         st.error(f"Data Save Error: {e}")
         return False
 
-def log_temporal_trace(event_type, details=""):
-    trace = {
-        "Timestamp": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "Event": event_type,
-        "Details": str(details)
-    }
-    # Ensure buffer exists before appending
-    if 'trace_buffer' not in st.session_state:
-        st.session_state.trace_buffer = []
-    st.session_state.trace_buffer.append(trace)
-
 def save_temporal_traces(conn, trace_buffer):
     if not trace_buffer:
         return True
     try:
         new_traces_df = pd.DataFrame(trace_buffer)
-        conn.create(
+        # Use .update here as well
+        conn.update(
             spreadsheet=st.secrets["gsheets"]["spreadsheet"],
             worksheet="Temporal_Traces", 
             data=new_traces_df
