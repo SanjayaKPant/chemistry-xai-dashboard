@@ -55,39 +55,48 @@ from database_manager import save_temporal_traces
 
 def show_quiz():
     st.header("📝 Chemistry Diagnostic: Atomic Structure")
-    
-    # --- TIER 1: THE TRIGGER ---
-    t1 = st.radio("**Tier 1: Content Knowledge**\nWhere are electrons primarily located?", 
-                  ["Select...", "Inside the Nucleus", "In the Electron Cloud"], key="t1_radio")
+    user = st.session_state.user_data
 
-    # --- THE HINT (Must be placed HERE to appear between Tier 1 and Tier 2) ---
+    # --- TIER 1 ---
+    t1 = st.radio("Tier 1: Where are electrons primarily located?", 
+                  ["Select...", "Inside the Nucleus", "In the Electron Cloud"], key="q1")
+
+    # --- AGENTIC HINT (Bypass logic for testing S001) ---
     if t1 != "Select...":
-        hint = get_agentic_hint("atom_structure_01", t1)
-        if hint:
-            st.info(f"🤖 **AI Tutor:** {hint}")
-            # We only log the trace once per session to avoid cluttering your PhD data
-            if 'hint_logged' not in st.session_state:
+        # FORCE hint for S001 or Exp_A to verify the UI
+        if user['User_ID'] == "S001" or user['Group'] == "Exp_A":
+            hint = get_agentic_hint("atom_structure_01", t1)
+            if hint:
+                st.info(f"🤖 **AI Tutor:** {hint}")
                 log_temporal_trace("HINT_VIEWED", details=t1)
-                st.session_state.hint_logged = True
 
-    # --- TIER 2 & 3: CONFIDENCE & REASONING ---
     st.divider()
-    t2 = st.select_slider("**Tier 2: Confidence**\nHow confident are you in the choice above?", 
-                          options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="t2_slider")
+    
+    # --- TIERS 2, 3, 4 (Linear Order) ---
+    t2 = st.select_slider("Tier 2: How confident are you?", 
+                          options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q2")
+    
+    t3 = st.text_area("Tier 3: Explain your reasoning:", key="q3")
+    
+    t4 = st.select_slider("Tier 4: Confidence in Reasoning?", 
+                          options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q4")
 
-    t3 = st.text_area("**Tier 3: Scientific Reasoning**\nExplain why you chose that location for electrons:", key="t3_text")
+    # --- SINGLE SUBMIT BUTTON AT THE END ---
+    # FIX: Assign the result of the button to 'submitted' here
+    submitted = st.button("Submit Final Response")
 
-    # --- TIER 4: REASONING CONFIDENCE ---
-    t4 = st.select_slider("**Tier 4: Confidence in Reasoning**\nHow sure are you that your explanation is scientifically sound?", 
-                          options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="t4_slider")
-
-    # --- FINAL SUBMISSION ---
-    if st.button("Submit Final Response"):
+    if submitted:
         if t1 == "Select...":
-            st.warning("Please answer Tier 1 before submitting.")
+            st.error("Please answer Tier 1 first.")
         else:
-            # Your saving logic...
-            st.success("Data synced to Google Drive!")
+            quiz_data = {
+                "Timestamp": datetime.now().isoformat(),
+                "User_ID": user['User_ID'],
+                "Tier_1": t1, "Tier_2": t2, "Tier_3": t3, "Tier_4": t4
+            }
+            if save_quiz_responses(conn, quiz_data):
+                save_temporal_traces(conn, st.session_state.trace_buffer)
+                st.success("✅ Data Captured!")
             
     # 2. Final Reasoning
     t3 = st.text_area("Reflecting on the hint (if any), explain your final choice:")
