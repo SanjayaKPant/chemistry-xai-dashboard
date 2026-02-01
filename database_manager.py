@@ -1,25 +1,34 @@
 import streamlit as st
 import pandas as pd
+from streamlit_gsheets import GSheetsConnection
+
+# 1. This defines 'conn' so main_app.py can find it
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+def log_temporal_trace(event_name, details=""):
+    """Captures micro-moments for Process Mining."""
+    if 'trace_buffer' not in st.session_state:
+        st.session_state.trace_buffer = []
+    
+    st.session_state.trace_buffer.append({
+        "User_ID": st.session_state.user_data.get('User_ID', 'Unknown'),
+        "Timestamp": pd.Timestamp.now().isoformat(),
+        "Event": event_name,
+        "Details": str(details)
+    })
 
 def save_temporal_traces(conn, trace_buffer):
-    """
-    Specifically handles the 'High-Fidelity Temporal Traces'.
-    Syncs the local session buffer to the Google Sheet.
-    """
+    """Syncs the local session buffer to the Google Sheet."""
     if not trace_buffer:
-        return True # Nothing to sync, so no error
+        return True
         
     try:
-        # 1. Convert buffer to DataFrame
         new_traces_df = pd.DataFrame(trace_buffer)
-        
-        # 2. Append to the specific GSheet tab
-        # Note: Ensure the tab 'Temporal_Traces' exists in your GSheet
         existing_traces = conn.read(worksheet="Temporal_Traces", ttl=0)
         updated_traces = pd.concat([existing_traces, new_traces_df], ignore_index=True)
         conn.update(worksheet="Temporal_Traces", data=updated_traces)
         
-        # 3. Clear the buffer locally to prevent duplicate saves
+        # Clear buffer locally to prevent duplicates
         st.session_state.trace_buffer = []
         return True
     except Exception as e:
