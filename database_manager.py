@@ -19,30 +19,25 @@ def log_temporal_trace(event_name, details=""):
     })
 
 def save_temporal_traces(conn, trace_buffer):
-    """Syncs the local session buffer to the Google Sheet."""
     if not trace_buffer:
         return True
-        
     try:
         new_traces_df = pd.DataFrame(trace_buffer)
-        existing_traces = conn.read(worksheet="Temporal_Traces", ttl=0)
-        updated_traces = pd.concat([existing_traces, new_traces_df], ignore_index=True)
-        conn.update(worksheet="Temporal_Traces", data=updated_traces)
-        
-        # Clear buffer locally to prevent duplicates
-        st.session_state.trace_buffer = []
+        # Explicitly tell it which spreadsheet to use from secrets
+        conn.update(worksheet="Temporal_Traces", data=new_traces_df, 
+                    spreadsheet=st.secrets["gsheets"]["public_gsheets_url"])
+        st.session_state.trace_buffer = [] 
         return True
     except Exception as e:
         st.error(f"Sync Error: {e}")
         return False
 
 def save_quiz_responses(conn, data_dict):
-    """Saves the static 4-tier quiz answers."""
     try:
         df = pd.DataFrame([data_dict])
-        existing = conn.read(worksheet="Responses", ttl=0)
-        updated = pd.concat([existing, df], ignore_index=True)
-        conn.update(worksheet="Responses", data=updated)
+        # Explicitly tell it which spreadsheet to use from secrets
+        conn.update(worksheet="Responses", data=df, 
+                    spreadsheet=st.secrets["gsheets"]["public_gsheets_url"])
         return True
     except Exception as e:
         st.error(f"Data Save Error: {e}")
