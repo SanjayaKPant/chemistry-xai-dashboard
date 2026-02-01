@@ -17,14 +17,15 @@ if 'trace_buffer' not in st.session_state:
 # --- 2. AUTHENTICATION LOGIC ---
 def check_login(user_id):
     try:
-        # We must use .read() with the explicit spreadsheet pointer
+        # Fetching the full participant list
         df = conn.read(
             spreadsheet=st.secrets["gsheets"]["spreadsheet"],
             worksheet="Participants",
-            ttl=0  # Ensures it fetches the freshest data from your sheet
+            ttl=0
         )
-        
-        user_row = df[df['User_ID'] == str(user_id)] # Convert to string to avoid type match errors
+        # Force the column to string to ensure matching works
+        df['User_ID'] = df['User_ID'].astype(str)
+        user_row = df[df['User_ID'] == str(user_id)]
         
         if not user_row.empty:
             st.session_state.user_data = user_row.iloc[0].to_dict()
@@ -32,13 +33,11 @@ def check_login(user_id):
             log_temporal_trace("LOGIN_SUCCESS", details=user_id)
             return True
         else:
-            st.error("User ID not found in the Participants list.")
+            st.error("User ID not found.")
             return False
-            
     except Exception as e:
-        st.error(f"Connection Error: {e}")
+        st.error(f"Login Connection Error: {e}")
         return False
-
     # --- TIER 1: CONTENT ---
     t1 = st.radio("Tier 1: Where are electrons primarily located?", 
                   ["Select...", "Inside the Nucleus", "In the Electron Cloud"], key="q1_v3")
