@@ -17,10 +17,11 @@ if 'trace_buffer' not in st.session_state:
 # --- 2. AUTHENTICATION LOGIC ---
 def check_login(user_id):
     try:
-        # 1. Properly pull the URL from Secrets
-        base_url = st.secrets["gsheets"]["public_gsheets_url"].split('/edit')[0]
-        # 2. Force the CSV export for the Participants tab (GID 1657925405)
-        csv_url = f"{base_url}/export?format=csv&gid=1657925405"
+        # Get base URL and ensure it doesn't have a trailing slash
+        base = st.secrets["gsheets"]["public_gsheets_url"].replace("/edit", "").rstrip("/")
+        # Force the export to CSV for the Participants tab (GID 1657925405)
+        csv_url = f"{base}/export?format=csv&gid=1657925405"
+        
         df = pd.read_csv(csv_url)
         
         # 3. Search for the student
