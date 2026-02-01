@@ -1,3 +1,4 @@
+from research_engine import get_agentic_hint
 import streamlit as st
 from datetime import datetime
 
