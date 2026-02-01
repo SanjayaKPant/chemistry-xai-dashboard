@@ -54,50 +54,54 @@ def show_home():
 from database_manager import save_temporal_traces
 
 def show_quiz():
-    st.header("📝 Chemistry Diagnostic: Atomic Structure")
-    user = st.session_state.user_data
-
-    # --- TIER 1 ---
+    st.title("🧪 Chemistry Diagnostic: Atomic Structure")
+    
+    # 1. Tier 1: Initial Choice
     t1 = st.radio("Tier 1: Where are electrons primarily located?", 
                   ["Select...", "Inside the Nucleus", "In the Electron Cloud"], key="q1")
 
-    # --- AGENTIC HINT (Bypass logic for testing S001) ---
+    # 2. THE AGENTIC HINT (Appears immediately after T1)
     if t1 != "Select...":
-        # FORCE hint for S001 or Exp_A to verify the UI
-        if user['User_ID'] == "S001" or user['Group'] == "Exp_A":
+        # We check both Group and a bypass for your test user S001
+        user_id = st.session_state.user_data.get('User_ID')
+        group = st.session_state.user_data.get('Group')
+        
+        if group == "Exp_A" or user_id == "S001":
             hint = get_agentic_hint("atom_structure_01", t1)
             if hint:
-                st.info(f"🤖 **AI Tutor:** {hint}")
+                st.info(f"🤖 **Socratic Hint:** {hint}")
                 log_temporal_trace("HINT_VIEWED", details=t1)
 
     st.divider()
-    
-    # --- TIERS 2, 3, 4 (Linear Order) ---
+
+    # 3. Tier 2 & 3: Confidence and Reasoning
     t2 = st.select_slider("Tier 2: How confident are you?", 
                           options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q2")
     
-    t3 = st.text_area("Tier 3: Explain your reasoning:", key="q3")
+    t3 = st.text_area("Tier 3: Explain your reasoning (Reflecting on the hint if any):", key="q3")
     
+    # 4. Tier 4: Meta-Confidence
     t4 = st.select_slider("Tier 4: Confidence in Reasoning?", 
                           options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q4")
 
-    # --- SINGLE SUBMIT BUTTON AT THE END ---
-    # FIX: Assign the result of the button to 'submitted' here
-    submitted = st.button("Submit Final Response")
+    st.write("") # Spacer
 
-    if submitted:
+    # 5. THE ONLY SUBMIT BUTTON (At the very bottom)
+    if st.button("Submit Final Research Data"):
         if t1 == "Select...":
-            st.error("Please answer Tier 1 first.")
+            st.error("Please select an answer for Tier 1.")
         else:
-            quiz_data = {
-                "Timestamp": datetime.now().isoformat(),
-                "User_ID": user['User_ID'],
+            quiz_results = {
+                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "User_ID": st.session_state.user_data['User_ID'],
                 "Tier_1": t1, "Tier_2": t2, "Tier_3": t3, "Tier_4": t4
             }
-            if save_quiz_responses(conn, quiz_data):
+            # Save to GSheets
+            if save_quiz_responses(conn, quiz_results):
                 save_temporal_traces(conn, st.session_state.trace_buffer)
-                st.success("✅ Data Captured!")
-            
+                st.success("✅ Assessment and Traces successfully synced to Drive!")
+                st.balloons()
+                
     # 2. Final Reasoning
     t3 = st.text_area("Reflecting on the hint (if any), explain your final choice:")
     
