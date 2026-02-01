@@ -18,7 +18,9 @@ if 'trace_buffer' not in st.session_state:
 def check_login(user_id):
     try:
         # Pass the secret URL directly to the read function
-        df = conn.read(spreadsheet=st.secrets["gsheets"]["public_gsheets_url"], ttl=0)
+       # This manually builds the export link to prevent 404 errors
+base_url = st.secrets["gsheets"]["public_gsheets_url"].split('/edit')[0]
+df = conn.read(spreadsheet=f"{base_url}/export?format=csv&gid=1657925405", ttl=0)
         
         # Finding the User in the 'User_ID' column
         user_row = df[df['User_ID'] == user_id]
