@@ -56,51 +56,51 @@ from database_manager import save_temporal_traces
 def show_quiz():
     st.title("🧪 Chemistry Diagnostic: Atomic Structure")
     
-    # 1. Tier 1: Initial Choice
-    t1 = st.radio("Tier 1: Where are electrons primarily located?", 
-                  ["Select...", "Inside the Nucleus", "In the Electron Cloud"], key="q1")
+    # Get current user details
+    user_id = st.session_state.user_data.get('User_ID', '')
+    user_group = st.session_state.user_data.get('Group', 'Control')
 
-    # 2. THE AGENTIC HINT (Appears immediately after T1)
+    # --- TIER 1: THE INPUT ---
+    t1 = st.radio("Tier 1: Where are electrons primarily located?", 
+                  ["Select...", "Inside the Nucleus", "In the Electron Cloud"], key="q1_active")
+
+    # --- THE HINT TRIGGER (Sit right below Tier 1) ---
     if t1 != "Select...":
-        # We check both Group and a bypass for your test user S001
-        user_id = st.session_state.user_data.get('User_ID')
-        group = st.session_state.user_data.get('Group')
-        
-        if group == "Exp_A" or user_id == "S001":
+        # FORCE: If you are S001 or in Exp_A, show the hint
+        if user_id == "S001" or user_group == "Exp_A":
             hint = get_agentic_hint("atom_structure_01", t1)
             if hint:
                 st.info(f"🤖 **Socratic Hint:** {hint}")
-                log_temporal_trace("HINT_VIEWED", details=t1)
+                # Log this moment for your PhD process mining
+                log_temporal_trace("HINT_SHOWN", details=f"User saw hint for: {t1}")
 
     st.divider()
 
-    # 3. Tier 2 & 3: Confidence and Reasoning
-    t2 = st.select_slider("Tier 2: How confident are you?", 
+    # --- TIERS 2, 3, 4 (Linear Sequence) ---
+    t2 = st.select_slider("Tier 2: Confidence level?", 
                           options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q2")
     
-    t3 = st.text_area("Tier 3: Explain your reasoning (Reflecting on the hint if any):", key="q3")
+    t3 = st.text_area("Tier 3: Scientific Reasoning (Reflect on the hint if provided):", key="q3")
     
-    # 4. Tier 4: Meta-Confidence
-    t4 = st.select_slider("Tier 4: Confidence in Reasoning?", 
+    t4 = st.select_slider("Tier 4: Confidence in your reasoning?", 
                           options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q4")
 
-    st.write("") # Spacer
-
-    # 5. THE ONLY SUBMIT BUTTON (At the very bottom)
-    if st.button("Submit Final Research Data"):
+    # --- THE ONLY SUBMIT BUTTON ---
+    # We use a unique key to prevent the NameError
+    if st.button("Finalize and Submit Research Data", key="final_submit_btn"):
         if t1 == "Select...":
-            st.error("Please select an answer for Tier 1.")
+            st.warning("Please provide a response for Tier 1.")
         else:
+            # Prepare data package
             quiz_results = {
                 "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                "User_ID": st.session_state.user_data['User_ID'],
+                "User_ID": user_id,
                 "Tier_1": t1, "Tier_2": t2, "Tier_3": t3, "Tier_4": t4
             }
-            # Save to GSheets
+            # Save logic
             if save_quiz_responses(conn, quiz_results):
                 save_temporal_traces(conn, st.session_state.trace_buffer)
-                st.success("✅ Assessment and Traces successfully synced to Drive!")
-                st.balloons()
+                st.success("✅ Research data successfully synced to Google Drive!")
                 
     # 2. Final Reasoning
     t3 = st.text_area("Reflecting on the hint (if any), explain your final choice:")
