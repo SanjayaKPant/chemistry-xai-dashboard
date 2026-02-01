@@ -35,10 +35,6 @@ def check_login(user_id):
     except Exception as e:
         st.error(f"Connection Error: {e}")
         return False
-# --- 3. THE 4-TIER DIAGNOSTIC MODULE ---
-def show_quiz():
-    st.title("🧪 Chemistry Diagnostic: Atomic Structure")
-    user = st.session_state.user_data
 
     # --- TIER 1: CONTENT ---
     t1 = st.radio("Tier 1: Where are electrons primarily located?", 
