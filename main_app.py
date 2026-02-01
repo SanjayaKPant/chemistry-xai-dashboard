@@ -17,8 +17,10 @@ if 'trace_buffer' not in st.session_state:
 # --- 2. AUTHENTICATION LOGIC ---
 def check_login(user_id):
     try:
-        # Use the existing connection to read the specific tab
-        df = conn.read(worksheet="Participants", ttl=0)
+        # Use the connection defined at the top of database_manager.py
+        # This automatically pulls the URL from your [gsheets] secrets
+        df = conn.read(ttl=0) 
+        
         user_row = df[df['User_ID'] == user_id]
         
         if not user_row.empty:
@@ -26,12 +28,13 @@ def check_login(user_id):
             st.session_state.logged_in = True
             log_temporal_trace("LOGIN_SUCCESS", details=user_id)
             return True
-        st.error("User ID not found.")
-        return False
+        else:
+            st.error("User ID not found.")
+            return False
+            
     except Exception as e:
         st.error(f"Connection Error: {e}")
         return False
-
 # --- 3. THE 4-TIER DIAGNOSTIC MODULE ---
 def show_quiz():
     st.title("🧪 Chemistry Diagnostic: Atomic Structure")
