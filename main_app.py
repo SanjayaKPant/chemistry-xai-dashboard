@@ -17,22 +17,21 @@ if 'trace_buffer' not in st.session_state:
 # --- 2. AUTHENTICATION LOGIC ---
 def check_login(user_id):
     try:
-        # Instead of pd.read_csv(url), we use the secure connection
-        # This looks at the "Participants" tab specifically
-        df = conn.read(worksheet="Participants")
+        # Pass the spreadsheet URL from your new secrets
+        df = conn.read(
+            spreadsheet=st.secrets["gsheets"]["spreadsheet"],
+            worksheet="Participants"
+        )
         
-        # Search for the student
         user_row = df[df['User_ID'] == user_id]
-        
         if not user_row.empty:
             st.session_state.user_data = user_row.iloc[0].to_dict()
             st.session_state.logged_in = True
             log_temporal_trace("LOGIN_SUCCESS", details=user_id)
             return True
         else:
-            st.error("User ID not found in the Participants list.")
+            st.error("User ID not found.")
             return False
-            
     except Exception as e:
         st.error(f"Connection Error: {e}")
         return False
