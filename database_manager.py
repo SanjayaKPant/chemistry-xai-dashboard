@@ -1,6 +1,5 @@
-import streamlit as st
-import pandas as pd
 from streamlit_gsheets import GSheetsConnection
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 # 1. This defines 'conn' so main_app.py can find it
 conn = st.connection("gsheets", type=GSheetsConnection)
