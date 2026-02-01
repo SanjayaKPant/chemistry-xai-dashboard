@@ -8,7 +8,6 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def save_quiz_responses(conn, data_dict):
     try:
         df = pd.DataFrame([data_dict])
-        # Check commas and parentheses carefully here:
         conn.create(
             spreadsheet=st.secrets["gsheets"]["spreadsheet"],
             worksheet="Responses", 
@@ -25,6 +24,9 @@ def log_temporal_trace(event_type, details=""):
         "Event": event_type,
         "Details": str(details)
     }
+    # Ensure buffer exists before appending
+    if 'trace_buffer' not in st.session_state:
+        st.session_state.trace_buffer = []
     st.session_state.trace_buffer.append(trace)
 
 def save_temporal_traces(conn, trace_buffer):
@@ -41,22 +43,4 @@ def save_temporal_traces(conn, trace_buffer):
         return True
     except Exception as e:
         st.error(f"Trace Sync Error: {e}")
-        return False
-
-def save_quiz_responses(conn, data_dict):
-    try:
-        df = pd.DataFrame([data_dict])
-        conn.create(
-            spreadsheet=st.secrets["gsheets"]["spreadsheet"],
-            worksheet="Responses", 
-            data=df
-        )
-        return True
-    except Exception as e:
-        st.error(f"Data Save Error: {e}")
-        return False
-        )
-        return True
-    except Exception as e:
-        st.error(f"Data Save Error: {e}")
         return False
