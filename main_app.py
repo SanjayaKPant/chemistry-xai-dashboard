@@ -17,11 +17,8 @@ if 'trace_buffer' not in st.session_state:
 # --- 2. AUTHENTICATION LOGIC ---
 def check_login(user_id):
     try:
-        # 1. The Direct Data Pull
-        csv_url = "https://docs.google.com/spreadsheets/d/1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BoNK60/export?format=csv&gid=1657925405"
-        df = pd.read_csv(csv_url)
-        
-        # 2. Finding the User
+        # Use the existing connection to read the specific tab
+        df = conn.read(worksheet="Participants", ttl=0)
         user_row = df[df['User_ID'] == user_id]
         
         if not user_row.empty:
@@ -29,10 +26,8 @@ def check_login(user_id):
             st.session_state.logged_in = True
             log_temporal_trace("LOGIN_SUCCESS", details=user_id)
             return True
-        else:
-            st.error("User ID not found in database.")
-            return False
-            
+        st.error("User ID not found.")
+        return False
     except Exception as e:
         st.error(f"Connection Error: {e}")
         return False
