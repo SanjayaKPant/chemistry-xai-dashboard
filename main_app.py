@@ -17,13 +17,11 @@ if 'trace_buffer' not in st.session_state:
 # --- 2. AUTHENTICATION LOGIC ---
 def check_login(user_id):
     try:
-        # Use the corrected URL from secrets
-        sheet_url = st.secrets["gsheets"]["public_gsheets_url"]
-        base = sheet_url.replace("/edit", "")
-        # This targets the Participants tab specifically
-        csv_url = f"{base}/export?format=csv&gid=1657925405"
+        # Instead of pd.read_csv(url), we use the secure connection
+        # This looks at the "Participants" tab specifically
+        df = conn.read(worksheet="Participants")
         
-        df = pd.read_csv(csv_url)
+        # Search for the student
         user_row = df[df['User_ID'] == user_id]
         
         if not user_row.empty:
@@ -32,8 +30,9 @@ def check_login(user_id):
             log_temporal_trace("LOGIN_SUCCESS", details=user_id)
             return True
         else:
-            st.error("User ID not found.")
+            st.error("User ID not found in the Participants list.")
             return False
+            
     except Exception as e:
         st.error(f"Connection Error: {e}")
         return False
