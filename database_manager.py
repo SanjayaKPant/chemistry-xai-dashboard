@@ -35,9 +35,11 @@ def save_temporal_traces(conn, trace_buffer):
 def save_quiz_responses(conn, data_dict):
     try:
         df = pd.DataFrame([data_dict])
-        # Explicitly tell it which spreadsheet to use from secrets
-        conn.update(worksheet="Responses", data=df, 
-                    spreadsheet=st.secrets["gsheets"]["public_gsheets_url"])
+        conn.create(
+            spreadsheet=st.secrets["gsheets"]["spreadsheet"],
+            worksheet="Responses", 
+            data=df
+        )
         return True
     except Exception as e:
         st.error(f"Data Save Error: {e}")
