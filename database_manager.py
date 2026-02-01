@@ -44,3 +44,8 @@ def save_quiz_responses(conn, data_dict):
     except Exception as e:
         st.error(f"Data Save Error: {e}")
         return False
+        )
+        return True
+    except Exception as e:
+        st.error(f"Data Save Error: {e}")
+        return False
