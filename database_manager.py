@@ -1,9 +1,9 @@
 import streamlit as st
 import pandas as pd
-from streamlit_gsheets import GSheetsConnection  # This must be exactly like this
+from streamlit_gsheets import GSheetsConnection
 
-# 1. This defines 'conn' correctly
-conn = st.connection("gsheets", type=GSheetsConnection)
+# This explicitly tells the connection to look for the [gsheets] section in Secrets
+conn = st.connection("gsheets", type=GSheetsConnection, spreadsheet=st.secrets["gsheets"]["public_gsheets_url"])
 
 def log_temporal_trace(event_name, details=""):
     """Captures micro-moments for Process Mining."""
