@@ -1,126 +1,96 @@
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
+from database_manager import conn, save_quiz_responses, log_temporal_trace, save_temporal_traces
+from research_engine import get_agentic_hint
 
-# At the top of main_app.py
-try:
-    from research_engine import log_temporal_trace, get_agentic_hint
-    from admin_dashboard import show_admin_portal
-    from database_manager import save_temporal_traces, save_quiz_responses
-except ImportError as e:
-    st.error(f"❌ Critical Error: Missing Research Modules. {e}")
-    st.stop()
-
-# --- 2. CONFIGURATION & SESSION STATE ---
+# --- 1. CONFIGURATION & SESSION STATE ---
 st.set_page_config(page_title="AI-Chem Research Portal", layout="wide")
 
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
+if 'user_data' not in st.session_state:
     st.session_state.user_data = None
 if 'trace_buffer' not in st.session_state:
     st.session_state.trace_buffer = []
 
-conn = st.connection("gsheets", type=GSheetsConnection)
-
-# --- 3. PAGE FUNCTIONS (DEFINED BEFORE USE) ---
-
-def show_login():
-    st.title("🇳🇵 PhD Research: AI in Chemistry")
-    st.subheader("Login with your Research ID")
-    input_id = st.text_input("Research ID:", placeholder="e.g. S001")
-    if st.button("Enter Portal"):
-        users_df = conn.read(worksheet="Participants")
-        user_row = users_df[users_df['User_ID'] == input_id]
+# --- 2. AUTHENTICATION LOGIC ---
+def check_login(user_id):
+    try:
+        sheet_url = st.secrets["gsheets"]["public_gsheets_url"]
+        df = pd.read_csv(f"{sheet_url.split('/edit')[0]}/export?format=csv&gid=1657925401")
+        user_row = df[df['User_ID'] == user_id]
         if not user_row.empty:
-            st.session_state.logged_in = True
             st.session_state.user_data = user_row.iloc[0].to_dict()
-            log_temporal_trace("USER_LOGIN_SUCCESS")
-            st.rerun()
-        else:
-            st.error("Access Denied: ID not found.")
+            st.session_state.logged_in = True
+            log_temporal_trace("LOGIN_SUCCESS", details=user_id)
+            return True
+    except Exception as e:
+        st.error(f"Access Error: {e}")
+    return False
 
-def show_home():
-    user = st.session_state.user_data
-    st.header(f"Welcome, {user.get('Name', 'Participant')}")
-    st.write(f"**Research Group:** {user.get('Group', 'Control')}")
-    st.markdown("### 📜 Research Information\nThis study investigates AI scaffolding in Chemistry.")
-    if st.sidebar.button("Logout"):
-        log_temporal_trace("USER_LOGOUT")
-        st.session_state.logged_in = False
-        st.rerun()
-
-# Import the new function at the top of main_app.py
-from database_manager import save_temporal_traces
-
+# --- 3. THE 4-TIER DIAGNOSTIC MODULE ---
 def show_quiz():
     st.title("🧪 Chemistry Diagnostic: Atomic Structure")
-    
-    # 1. Fetch User Info for the Socratic Logic
-    user_id = st.session_state.user_data.get('User_ID', 'Unknown')
-    group = st.session_state.user_data.get('Group', 'Control')
+    user = st.session_state.user_data
 
-    # 2. TIER 1: Initial Question
+    # --- TIER 1: CONTENT ---
     t1 = st.radio("Tier 1: Where are electrons primarily located?", 
-                  ["Select...", "Inside the Nucleus", "In the Electron Cloud"], key="q1_choice")
+                  ["Select...", "Inside the Nucleus", "In the Electron Cloud"], key="q1_v3")
 
-    # 3. THE BLUE BOX (Agentic Hint)
-    # This must appear immediately after T1 is selected
+    # --- AGENTIC SCALFFOLDING (The Blue Box) ---
     if t1 != "Select...":
-        # S001 is your test bypass
-        if group == "Exp_A" or user_id == "S001":
+        # Testing bypass for S001 or Experimental Group A
+        if user['Group'] == "Exp_A" or user['User_ID'] == "S001":
             hint = get_agentic_hint("atom_structure_01", t1)
             if hint:
-                st.info(f"🤖 **Socratic Hint:** {hint}")
-                # Log the trace so we can see it in Google Sheets later
+                st.info(f"🤖 **AI Tutor:** {hint}")
                 log_temporal_trace("HINT_VIEWED", details=t1)
 
     st.divider()
 
-    # 4. TIERS 2, 3, 4 (Linear Sequence)
-    t2 = st.select_slider("Tier 2: How confident are you?", 
-                          options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q2_conf")
+    # --- TIERS 2, 3, 4: CONFIDENCE & REASONING ---
+    t2 = st.select_slider("Tier 2: How confident are you in this choice?", 
+                          options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q2_v3")
     
-    t3 = st.text_area("Tier 3: Explain your scientific reasoning:", key="q3_reason")
+    t3 = st.text_area("Tier 3: Scientific Reasoning (Explain your choice below):", key="q3_v3")
     
-    t4 = st.select_slider("Tier 4: How confident are you in this explanation?", 
-                          options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q4_conf")
+    t4 = st.select_slider("Tier 4: How confident are you in your explanation?", 
+                          options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q4_v3")
 
-    # 5. THE ONLY SUBMIT BUTTON (at the very bottom)
-    if st.button("Submit Final Research Data"):
+    # --- SINGLE SUBMIT BUTTON ---
+    if st.button("Submit Research Data", key="final_btn"):
         if t1 == "Select...":
-            st.error("Please answer Tier 1 before submitting.")
+            st.warning("Please answer Tier 1.")
         else:
-            # Package the data for your July 2026 paper
-            quiz_results = {
+            quiz_data = {
                 "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                "User_ID": user_id,
+                "User_ID": user['User_ID'],
                 "Tier_1": t1, "Tier_2": t2, "Tier_3": t3, "Tier_4": t4
             }
-            # Save to GSheets
-            if save_quiz_responses(conn, quiz_results):
+            if save_quiz_responses(conn, quiz_data):
                 save_temporal_traces(conn, st.session_state.trace_buffer)
-                st.success("✅ Research Data and Temporal Traces Synced!")
+                st.success("✅ Assessment & Temporal Traces Synced to Google Drive!")
                 st.balloons()
-                
-            
-# --- 4. MAIN NAVIGATION ROUTING ---
+
+# --- 4. NAVIGATION & ROUTING ---
 if not st.session_state.logged_in:
-    show_login()
+    st.title("🔐 Researcher Login")
+    u_id = st.text_input("Enter User ID (e.g., S001):").upper()
+    if st.button("Login"):
+        if check_login(u_id):
+            st.rerun()
 else:
-    user_info = st.session_state.user_data
-    role = user_info.get('Role', 'Student')
-    
-    st.sidebar.title("🔬 Research Menu")
-    pages = ["Home", "Quiz"]
-    if role in ["Admin", "Supervisor"]:
-        pages.append("Researcher Dashboard")
-    
-    choice = st.sidebar.selectbox("Go to:", pages)
-    
-    if choice == "Home": 
-        show_home()
-    elif choice == "Quiz": 
+    with st.sidebar:
+        st.write(f"👤 **User:** {st.session_state.user_data['Name']}")
+        st.write(f"📊 **Group:** {st.session_state.user_data['Group']}")
+        page = st.selectbox("Go to:", ["Quiz", "Research Dashboard"])
+        if st.button("Logout"):
+            st.session_state.logged_in = False
+            st.rerun()
+
+    if page == "Quiz":
         show_quiz()
-    elif choice == "Researcher Dashboard": 
-        show_admin_portal(conn)
+    else:
+        from admin_dashboard import show_admin_portal
+        show_admin_portal()
