@@ -18,7 +18,8 @@ if 'trace_buffer' not in st.session_state:
 def check_login(user_id):
     try:
         sheet_url = st.secrets["gsheets"]["public_gsheets_url"]
-        df = pd.read_csv(f"{sheet_url.split('/edit')[0]}/export?format=csv&gid=1657925405")
+        # Updated Line 21 to force a CSV export
+df = pd.read_csv(f"https://docs.google.com/spreadsheets/d/1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BoNK60/export?format=csv&gid=1657925405")
         user_row = df[df['User_ID'] == user_id]
         if not user_row.empty:
             st.session_state.user_data = user_row.iloc[0].to_dict()
