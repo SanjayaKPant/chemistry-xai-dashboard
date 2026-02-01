@@ -56,77 +56,53 @@ from database_manager import save_temporal_traces
 def show_quiz():
     st.title("🧪 Chemistry Diagnostic: Atomic Structure")
     
-    # Get current user details
-    user_id = st.session_state.user_data.get('User_ID', '')
-    user_group = st.session_state.user_data.get('Group', 'Control')
+    # 1. Fetch User Info for the Socratic Logic
+    user_id = st.session_state.user_data.get('User_ID', 'Unknown')
+    group = st.session_state.user_data.get('Group', 'Control')
 
-    # --- TIER 1: THE INPUT ---
+    # 2. TIER 1: Initial Question
     t1 = st.radio("Tier 1: Where are electrons primarily located?", 
-                  ["Select...", "Inside the Nucleus", "In the Electron Cloud"], key="q1_active")
+                  ["Select...", "Inside the Nucleus", "In the Electron Cloud"], key="q1_choice")
 
-    # --- THE HINT TRIGGER (Sit right below Tier 1) ---
+    # 3. THE BLUE BOX (Agentic Hint)
+    # This must appear immediately after T1 is selected
     if t1 != "Select...":
-        # FORCE: If you are S001 or in Exp_A, show the hint
-        if user_id == "S001" or user_group == "Exp_A":
+        # S001 is your test bypass
+        if group == "Exp_A" or user_id == "S001":
             hint = get_agentic_hint("atom_structure_01", t1)
             if hint:
                 st.info(f"🤖 **Socratic Hint:** {hint}")
-                # Log this moment for your PhD process mining
-                log_temporal_trace("HINT_SHOWN", details=f"User saw hint for: {t1}")
+                # Log the trace so we can see it in Google Sheets later
+                log_temporal_trace("HINT_VIEWED", details=t1)
 
     st.divider()
 
-    # --- TIERS 2, 3, 4 (Linear Sequence) ---
-    t2 = st.select_slider("Tier 2: Confidence level?", 
-                          options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q2")
+    # 4. TIERS 2, 3, 4 (Linear Sequence)
+    t2 = st.select_slider("Tier 2: How confident are you?", 
+                          options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q2_conf")
     
-    t3 = st.text_area("Tier 3: Scientific Reasoning (Reflect on the hint if provided):", key="q3")
+    t3 = st.text_area("Tier 3: Explain your scientific reasoning:", key="q3_reason")
     
-    t4 = st.select_slider("Tier 4: Confidence in your reasoning?", 
-                          options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q4")
+    t4 = st.select_slider("Tier 4: How confident are you in this explanation?", 
+                          options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q4_conf")
 
-    # --- THE ONLY SUBMIT BUTTON ---
-    # We use a unique key to prevent the NameError
-    if st.button("Finalize and Submit Research Data", key="final_submit_btn"):
+    # 5. THE ONLY SUBMIT BUTTON (at the very bottom)
+    if st.button("Submit Final Research Data"):
         if t1 == "Select...":
-            st.warning("Please provide a response for Tier 1.")
+            st.error("Please answer Tier 1 before submitting.")
         else:
-            # Prepare data package
+            # Package the data for your July 2026 paper
             quiz_results = {
                 "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
                 "User_ID": user_id,
                 "Tier_1": t1, "Tier_2": t2, "Tier_3": t3, "Tier_4": t4
             }
-            # Save logic
+            # Save to GSheets
             if save_quiz_responses(conn, quiz_results):
                 save_temporal_traces(conn, st.session_state.trace_buffer)
-                st.success("✅ Research data successfully synced to Google Drive!")
+                st.success("✅ Research Data and Temporal Traces Synced!")
+                st.balloons()
                 
-    # 2. Final Reasoning
-    t3 = st.text_area("Reflecting on the hint (if any), explain your final choice:")
-    
-    if st.button("Submit Final Answer"):
-        # ... your existing save logic ...
-        st.success("Data Captured!")
-
-    # Now 'submitted' is defined and safe to check
-    if submitted:
-        log_temporal_trace("QUIZ_SUBMITTED", details=t1) # Capture specific tiers
-        
-        # Prepare data for Google Sheets
-        quiz_data = {
-            "Timestamp": datetime.now().isoformat(),
-            "User_ID": user['User_ID'],
-            "Tier_1": t1,
-            "Tier_3": t3
-        }
-        
-        # Use the modular database manager to save
-        if save_quiz_responses(conn, quiz_data):
-            save_temporal_traces(conn, st.session_state.trace_buffer)
-            st.success("✅ Research data synced successfully!")
-        else:
-            st.error("❌ Sync failed. Please contact the researcher.")
             
 # --- 4. MAIN NAVIGATION ROUTING ---
 if not st.session_state.logged_in:
