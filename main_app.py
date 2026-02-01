@@ -17,18 +17,25 @@ if 'trace_buffer' not in st.session_state:
 # --- 2. AUTHENTICATION LOGIC ---
 def check_login(user_id):
     try:
-        # Pass the secret URL directly to the read function
-       # This manually builds the export link to prevent 404 errors
-base_url = st.secrets["gsheets"]["public_gsheets_url"].split('/edit')[0]
-df = conn.read(spreadsheet=f"{base_url}/export?format=csv&gid=1657925405", ttl=0)
+        # These lines MUST be indented more than the 'try'
+        base_url = st.secrets["gsheets"]["public_gsheets_url"].split('/edit')[0]
+        csv_url = f"{base_url}/export?format=csv&gid=1657925405"
+        df = pd.read_csv(csv_url)
         
-        # Finding the User in the 'User_ID' column
         user_row = df[df['User_ID'] == user_id]
         
         if not user_row.empty:
-            # Store data in session state for use in the quiz
             st.session_state.user_data = user_row.iloc[0].to_dict()
             st.session_state.logged_in = True
+            log_temporal_trace("LOGIN_SUCCESS", details=user_id)
+            return True
+        else:
+            st.error("User ID not found.")
+            return False
+            
+    except Exception as e:
+        st.error(f"Connection Error: {e}")
+        return False
             log_temporal_trace("LOGIN_SUCCESS", details=user_id)
             return True
         else:
