@@ -17,13 +17,11 @@ if 'trace_buffer' not in st.session_state:
 # --- 2. AUTHENTICATION LOGIC ---
 def check_login(user_id):
     try:
-        # Fetching the full participant list
         df = conn.read(
             spreadsheet=st.secrets["gsheets"]["spreadsheet"],
             worksheet="Participants",
             ttl=0
         )
-        # Force the column to string to ensure matching works
         df['User_ID'] = df['User_ID'].astype(str)
         user_row = df[df['User_ID'] == str(user_id)]
         
@@ -38,13 +36,18 @@ def check_login(user_id):
     except Exception as e:
         st.error(f"Login Connection Error: {e}")
         return False
-    # --- TIER 1: CONTENT ---
+
+# --- 3. QUIZ INTERFACE FUNCTION ---
+def show_quiz():
+    user = st.session_state.user_data
+    st.title("🧪 Chemistry Diagnostic: Atomic Structure")
+    
+    # --- TIER 1 ---
     t1 = st.radio("Tier 1: Where are electrons primarily located?", 
                   ["Select...", "Inside the Nucleus", "In the Electron Cloud"], key="q1_v3")
 
-    # --- AGENTIC SCALFFOLDING (The Blue Box) ---
+    # --- AGENTIC SCAFFOLDING ---
     if t1 != "Select...":
-        # Testing bypass for S001 or Experimental Group A
         if user['Group'] == "Exp_A" or user['User_ID'] == "S001":
             hint = get_agentic_hint("atom_structure_01", t1)
             if hint:
@@ -53,7 +56,7 @@ def check_login(user_id):
 
     st.divider()
 
-    # --- TIERS 2, 3, 4: CONFIDENCE & REASONING ---
+    # --- TIERS 2, 3, 4 ---
     t2 = st.select_slider("Tier 2: How confident are you in this choice?", 
                           options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q2_v3")
     
@@ -62,18 +65,22 @@ def check_login(user_id):
     t4 = st.select_slider("Tier 4: How confident are you in your explanation?", 
                           options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q4_v3")
 
-    # --- SINGLE SUBMIT BUTTON ---
+    # --- SUBMIT BUTTON ---
     if st.button("Submit Research Data", key="final_btn"):
         if t1 == "Select...":
             st.warning("Please answer Tier 1.")
         else:
             quiz_data = {
-                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
                 "User_ID": user['User_ID'],
-                "Tier_1": t1, "Tier_2": t2, "Tier_3": t3, "Tier_4": t4
+                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "Tier_1": t1, 
+                "Tier_2": t2, 
+                "Tier_3": t3, 
+                "Tier_4": t4
             }
-            if save_quiz_responses(conn, quiz_data):
-                save_temporal_traces(conn, st.session_state.trace_buffer)
+            # Note: We don't pass 'conn' here because database_manager handles it internally
+            if save_quiz_responses(quiz_data):
+                save_temporal_traces(st.session_state.trace_buffer)
                 st.success("✅ Assessment & Temporal Traces Synced to Google Drive!")
                 st.balloons()
 
@@ -98,23 +105,3 @@ else:
     else:
         from admin_dashboard import show_admin_portal
         show_admin_portal()
-
-# --- 5. FINALLY SUBMIT BUTTON ---
-if st.button("Submit Research Data", key="final_submit"):
-    if not tier1_choice:
-        st.warning("Please answer Tier 1.")
-    else:
-        quiz_data = {
-            "User_ID": st.session_state.user_data['User_ID'],
-            "Timestamp": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "Tier_1": tier1_choice,
-            "Tier_2": tier2_conf,
-            "Tier_3": tier3_reason,
-            "Tier_4": tier4_conf
-        }
-        
-        # Save to Google Sheets
-        if save_quiz_responses(quiz_data):
-            save_temporal_traces(st.session_state.trace_buffer)
-            st.success("Research & Temporal Traces Synced to Google Drive!")
-            st.balloons()
