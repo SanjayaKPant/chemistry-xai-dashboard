@@ -54,7 +54,24 @@ def show_quiz():
                 log_temporal_trace("HINT_VIEWED", details=t1)
 
     st.divider()
-    t2 = st.select_slider("Tier 2: Confidence in choice?", options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q2")
+ # --- ENHANCED CONFIDENCE SLIDERS ---
+
+# Tier 2: Confidence in Choice
+st.subheader("How sure are you about your answer?")
+t2_emoji = st.select_slider(
+    "Slide to match your confidence level:",
+    options=["🤔 Not Sure", "🤨 Maybe", "🙂 Confident", "😎 Totally Sure!"],
+    key="q2_enhanced"
+)
+
+# ... inside the submit logic, you can map these back to your data values if needed
+confidence_map = {
+    "🤔 Not Sure": "Not Confident",
+    "🤨 Maybe": "Somewhat",
+    "🙂 Confident": "Confident",
+    "😎 Totally Sure!": "Very Confident"
+}
+final_t2 = confidence_map[t2_emoji]
     t3 = st.text_area("Tier 3: Scientific Reasoning:", key="q3")
     t4 = st.select_slider("Tier 4: Confidence in explanation?", options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q4")
 
