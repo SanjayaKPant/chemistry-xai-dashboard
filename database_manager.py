@@ -84,3 +84,6 @@ def save_temporal_traces(trace_buffer):
     except Exception as e:
         st.error(f"Trace Sync Error: {e}")
         return False
+@st.cache_resource
+def get_gspread_client():
+    # ... keep your existing connection logic here ...
