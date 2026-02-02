@@ -72,8 +72,8 @@ confidence_map = {
     "😎 Totally Sure!": "Very Confident"
 }
 final_t2 = confidence_map[t2_emoji]
-    t3 = st.text_area("Tier 3: Scientific Reasoning:", key="q3")
-    t4 = st.select_slider("Tier 4: Confidence in explanation?", options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q4")
+t3 = st.text_area("Tier 3: Scientific Reasoning:", key="q3")
+t4 = st.select_slider("Tier 4: Confidence in explanation?", options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q4")
 
     if st.button("Submit Assessment", key="final_btn"):
         if t1 == "Select...":
