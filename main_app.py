@@ -1,12 +1,21 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-# Note: 'conn' is removed because gspread handles connection internally
 from database_manager import check_login, save_quiz_responses, save_temporal_traces
 from research_engine import get_agentic_hint
 
-# --- 1. CONFIGURATION & SESSION STATE ---
-st.set_page_config(page_title="AI-Chem Research Portal", layout="wide")
+# --- 1. CONFIGURATION & UI STYLING ---
+st.set_page_config(page_title="Chem-XAI Research Lab", page_icon="🧪", layout="wide")
+
+# Professional Research UI Styling
+st.markdown("""
+    <style>
+    .stApp { background-color: #f8f9fa; }
+    .stRadio > label { font-size: 1.2rem; font-weight: bold; color: #1c3d5a; }
+    .stAlert { border-radius: 10px; border-left: 8px solid #007bff; }
+    .stButton > button { border-radius: 20px; background-color: #007bff; color: white; width: 100%; }
+    </style>
+    """, unsafe_allow_html=True)
 
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
@@ -16,7 +25,6 @@ if 'trace_buffer' not in st.session_state:
     st.session_state.trace_buffer = []
 
 # --- 2. TEMPORAL TRACE HELPER ---
-# Moved here to ensure it has direct access to session_state
 def log_temporal_trace(event_type, details=""):
     user_id = st.session_state.user_data.get('User_ID', 'Unknown') if st.session_state.user_data else "Unknown"
     trace = {
@@ -27,18 +35,18 @@ def log_temporal_trace(event_type, details=""):
     }
     st.session_state.trace_buffer.append(trace)
 
-# --- 3. QUIZ INTERFACE FUNCTION ---
+# --- 3. QUIZ INTERFACE ---
 def show_quiz():
     user = st.session_state.user_data
-    st.title("🧪 Chemistry Diagnostic: Atomic Structure")
+    st.title("🧪 Atomic Structure Diagnostic")
+    st.info(f"Welcome, {user['Name']}! Please answer carefully. AI Tutor hints may appear to guide you.")
     
-    # --- TIER 1 ---
+    # Tier 1
     t1 = st.radio("Tier 1: Where are electrons primarily located?", 
-                  ["Select...", "Inside the Nucleus", "In the Electron Cloud"], key="q1_v3")
+                  ["Select...", "Inside the Nucleus", "In the Electron Cloud"], key="q1")
 
-    # --- AGENTIC SCAFFOLDING ---
+    # Agentic Scaffolding Logic
     if t1 != "Select...":
-        # Check experimental group status
         if user.get('Group') == "Exp_A" or user.get('User_ID') == "S001":
             hint = get_agentic_hint("atom_structure_01", t1)
             if hint:
@@ -46,64 +54,43 @@ def show_quiz():
                 log_temporal_trace("HINT_VIEWED", details=t1)
 
     st.divider()
+    t2 = st.select_slider("Tier 2: Confidence in choice?", options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q2")
+    t3 = st.text_area("Tier 3: Scientific Reasoning:", key="q3")
+    t4 = st.select_slider("Tier 4: Confidence in explanation?", options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q4")
 
-    # --- TIERS 2, 3, 4 ---
-    t2 = st.select_slider("Tier 2: How confident are you in this choice?", 
-                          options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q2_v3")
-    
-    t3 = st.text_area("Tier 3: Scientific Reasoning (Explain your choice below):", key="q3_v3")
-    
-    t4 = st.select_slider("Tier 4: How confident are you in your explanation?", 
-                          options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q4_v3")
-
-    # --- SUBMIT BUTTON ---
-    if st.button("Submit Research Data", key="final_btn"):
+    if st.button("Submit Assessment", key="final_btn"):
         if t1 == "Select...":
             st.warning("Please answer Tier 1.")
         else:
             quiz_data = {
                 "User_ID": user['User_ID'],
                 "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "Tier_1": t1, 
-                "Tier_2": t2, 
-                "Tier_3": t3, 
-                "Tier_4": t4
+                "Tier_1": t1, "Tier_2": t2, "Tier_3": t3, "Tier_4": t4
             }
-            
-            # Using the new robust gspread saving logic
             if save_quiz_responses(quiz_data):
                 save_temporal_traces(st.session_state.trace_buffer)
-                st.success("✅ Assessment & Temporal Traces Synced to Google Drive!")
+                st.success("✅ Research Data Synced!")
                 st.balloons()
 
-# --- 4. NAVIGATION & ROUTING ---
+# --- 4. NAVIGATION ROUTING ---
 if not st.session_state.logged_in:
     st.title("🔐 Researcher Login")
-    u_id = st.text_input("Enter User ID (e.g., S001):").upper()
+    u_id = st.text_input("User ID:").upper()
     if st.button("Login"):
-        # This now triggers the gspread handshake in database_manager.py
         if check_login(u_id):
             log_temporal_trace("LOGIN_SUCCESS", details=u_id)
             st.rerun()
-        else:
-            # Error message is already handled inside check_login via st.error
-            pass
 else:
     with st.sidebar:
-        st.write(f"👤 **User:** {st.session_state.user_data.get('Name', 'Unknown')}")
-        st.write(f"📊 **Group:** {st.session_state.user_data.get('Group', 'Unknown')}")
-        page = st.selectbox("Go to:", ["Quiz", "Research Dashboard"])
+        st.header(f"👤 {st.session_state.user_data['Name']}")
+        st.write(f"Group: {st.session_state.user_data['Group']}")
+        page = st.selectbox("Navigation", ["Quiz", "Research Dashboard"])
         if st.button("Logout"):
             st.session_state.logged_in = False
-            st.session_state.user_data = None
             st.rerun()
 
     if page == "Quiz":
         show_quiz()
     else:
-        # Import only when needed to prevent circular import issues
-        try:
-            from admin_dashboard import show_admin_portal
-            show_admin_portal()
-        except ImportError:
-            st.error("Admin Dashboard module not found.")
+        from admin_dashboard import show_admin_portal
+        show_admin_portal()
