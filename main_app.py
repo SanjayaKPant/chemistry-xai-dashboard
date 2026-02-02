@@ -39,13 +39,20 @@ def log_temporal_trace(event_type, details=""):
 def show_quiz():
     user = st.session_state.user_data
     st.title("🧪 Atomic Structure Diagnostic")
-    st.info(f"Welcome, {user['Name']}! Please answer carefully. AI Tutor hints may appear to guide you.")
     
-    # Tier 1
-    t1 = st.radio("Tier 1: Where are electrons primarily located?", 
+    # Visual Progress Bar
+    progress = 0
+    if st.session_state.get('q1') != "Select...": progress += 25
+    if st.session_state.get('q3'): progress += 25
+    st.progress(progress / 50) # Simple 2-step progress visual
+    
+    st.info(f"Welcome, {user['Name']}! Let's explore the atom together.")
+    
+    # --- TIER 1 ---
+    t1 = st.radio("1️⃣ Where are electrons primarily located?", 
                   ["Select...", "Inside the Nucleus", "In the Electron Cloud"], key="q1")
 
-    # Agentic Scaffolding Logic
+    # Agentic Scaffolding (XAI Hints)
     if t1 != "Select...":
         if user.get('Group') == "Exp_A" or user.get('User_ID') == "S001":
             hint = get_agentic_hint("atom_structure_01", t1)
@@ -54,60 +61,52 @@ def show_quiz():
                 log_temporal_trace("HINT_VIEWED", details=t1)
 
     st.divider()
- # --- ENHANCED CONFIDENCE SLIDERS ---
 
-# Tier 2: Confidence in Choice
-st.subheader("How sure are you about your answer?")
-t2_emoji = st.select_slider(
-    "Slide to match your confidence level:",
-    options=["🤔 Not Sure", "🤨 Maybe", "🙂 Confident", "😎 Totally Sure!"],
-    key="q2_enhanced"
-)
+    # --- TIER 2: EMOJI SLIDER ---
+    st.write("2️⃣ **How sure are you about that choice?**")
+    t2_emoji = st.select_slider(
+        "Slide the emoji to match your feeling:",
+        options=["🤔 Not Sure", "🤨 Maybe", "🙂 Confident", "😎 Totally Sure!"],
+        key="q2_ui"
+    )
 
-# ... inside the submit logic, you can map these back to your data values if needed
-confidence_map = {
-    "🤔 Not Sure": "Not Confident",
-    "🤨 Maybe": "Somewhat",
-    "🙂 Confident": "Confident",
-    "😎 Totally Sure!": "Very Confident"
-}
-final_t2 = confidence_map[t2_emoji]
-t3 = st.text_area("Tier 3: Scientific Reasoning:", key="q3")
-t4 = st.select_slider("Tier 4: Confidence in explanation?", options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q4")
+    # --- TIER 3 ---
+    st.write("3️⃣ **Explain your scientific reasoning:**")
+    t3 = st.text_area("Why did you choose that answer?", placeholder="Because...", key="q3")
+    
+    # --- TIER 4: EMOJI SLIDER ---
+    st.write("4️⃣ **How sure are you about your explanation?**")
+    t4_emoji = st.select_slider(
+        "How confident is your reasoning?",
+        options=["🤔 Not Sure", "🤨 Maybe", "🙂 Confident", "😎 Totally Sure!"],
+        key="q4_ui"
+    )
 
-    if st.button("Submit Assessment", key="final_btn"):
-    if t1 == "Select...":
-            st.warning("Please answer Tier 1.")
+    # Mapping Emojis back to Research Data strings for your Admin Dashboard
+    emoji_map = {
+        "🤔 Not Sure": "Not Confident",
+        "🤨 Maybe": "Somewhat",
+        "🙂 Confident": "Confident",
+        "😎 Totally Sure!": "Very Confident"
+    }
+
+    # --- SUBMIT BUTTON ---
+    # Ensure this block is indented exactly once inside the show_quiz function
+    if st.button("🚀 Finish & Submit Assessment", key="final_btn"):
+        if t1 == "Select...":
+            st.warning("Please answer Question 1 before submitting!")
+        elif not t3.strip():
+            st.warning("Please provide your reasoning in Tier 3.")
         else:
             quiz_data = {
                 "User_ID": user['User_ID'],
                 "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "Tier_1": t1, "Tier_2": t2, "Tier_3": t3, "Tier_4": t4
+                "Tier_1": t1, 
+                "Tier_2": emoji_map[t2_emoji], 
+                "Tier_3": t3, 
+                "Tier_4": emoji_map[t4_emoji]
             }
             if save_quiz_responses(quiz_data):
                 save_temporal_traces(st.session_state.trace_buffer)
-                st.success("✅ Research Data Synced!")
+                st.success("✅ Research Data Synced! Great job!")
                 st.balloons()
-
-# --- 4. NAVIGATION ROUTING ---
-if not st.session_state.logged_in:
-    st.title("🔐 Researcher Login")
-    u_id = st.text_input("User ID:").upper()
-    if st.button("Login"):
-        if check_login(u_id):
-            log_temporal_trace("LOGIN_SUCCESS", details=u_id)
-            st.rerun()
-else:
-    with st.sidebar:
-        st.header(f"👤 {st.session_state.user_data['Name']}")
-        st.write(f"Group: {st.session_state.user_data['Group']}")
-        page = st.selectbox("Navigation", ["Quiz", "Research Dashboard"])
-        if st.button("Logout"):
-            st.session_state.logged_in = False
-            st.rerun()
-
-    if page == "Quiz":
-        show_quiz()
-    else:
-        from admin_dashboard import show_admin_portal
-        show_admin_portal()
