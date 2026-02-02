@@ -1,44 +1,58 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from database_manager import save_temporal_traces 
+from database_manager import get_gspread_client
 
-def show_admin_portal(conn):
-    st.title("📊 Researcher Management Console")
+def show_admin_portal():
+    st.title("📊 Research Command Center")
+    st.markdown("Monitor real-time participant engagement and data distribution.")
     
-    # 1. TRACE SYNC SECTION
-    # Check if there is data waiting to be saved
-    buffer_size = len(st.session_state.get('trace_buffer', []))
-    st.info(f"Current session has **{buffer_size}** unsynced traces.")
+    try:
+        # Establish connection using our robust gspread logic
+        client = get_gspread_client()
+        sh = client.open_by_url(st.secrets["gsheets"]["spreadsheet"])
+        
+        # Load Data
+        resp_df = pd.DataFrame(sh.worksheet("Responses").get_all_records())
+        part_df = pd.DataFrame(sh.worksheet("Participants").get_all_records())
 
-    if st.button("🚀 Push Traces to Google Drive"):
-        if buffer_size > 0:
-            success = save_temporal_traces(conn, st.session_state.trace_buffer)
-            if success:
-                st.success("Successfully synced to Google Drive!")
-        else:
-            st.warning("No new data to sync.")
+        # --- 1. Top Level Metrics ---
+        m1, m2, m3 = st.columns(3)
+        with m1:
+            st.metric("Recruited", len(part_df))
+        with m2:
+            st.metric("Submissions", len(resp_df))
+        with m3:
+            rate = (len(resp_df)/len(part_df)*100) if len(part_df) > 0 else 0
+            st.metric("Completion Rate", f"{rate:.1f}%")
 
-    st.divider()
-    
-    # 2. DATA VISUALIZATION & VERIFICATION
-    if st.checkbox("Show Live Data from Drive"):
-        try:
-            # SAFE-GUARD: Attempt to read the traces
-            live_data = conn.read(worksheet="Temporal_Traces", ttl=0)
-            
-            if not live_data.empty:
-                st.subheader("Live Temporal Analytics")
-                # Show a quick summary of events (PhD Process Mining)
-                fig = px.bar(live_data, x="Event", color="User_ID", title="Event Distribution per User")
-                st.plotly_chart(fig, use_container_width=True)
-                
-                st.write("### Raw Data Table")
-                st.dataframe(live_data)
+        st.divider()
+
+        # --- 2. Visual Analytics ---
+        col_a, col_b = st.columns(2)
+        
+        with col_a:
+            st.subheader("Group Participation")
+            if not resp_df.empty:
+                # We merge to find out the group of the people who responded
+                merged = resp_df.merge(part_df[['User_ID', 'Group']], on='User_ID', how='left')
+                fig_pie = px.pie(merged, names='Group', hole=0.4, 
+                                 color_discrete_sequence=px.colors.sequential.RdBu)
+                st.plotly_chart(fig_pie, use_container_width=True)
             else:
-                st.warning("The 'Temporal_Traces' worksheet is empty.")
-                
-        except Exception as e:
-            # This catches the 'WorksheetNotFound' error and explains it to you
-            st.error("⚠️ The 'Temporal_Traces' tab was not found or is inaccessible.")
-            st.info("💡 **Required Action:** Go to your Google Sheet and create a tab named exactly `Temporal_Traces` with headers: User_ID, Timestamp, Event, Details.")
+                st.info("Waiting for first submission...")
+
+        with col_b:
+            st.subheader("Confidence Trends")
+            if not resp_df.empty:
+                fig_bar = px.histogram(resp_df, x="Tier_2", 
+                                       labels={'Tier_2': 'Confidence Level'},
+                                       color_discrete_sequence=['#007bff'])
+                st.plotly_chart(fig_bar, use_container_width=True)
+
+        # --- 3. Raw Data Preview ---
+        with st.expander("🔍 View Latest Raw Responses"):
+            st.table(resp_df.tail(5))
+
+    except Exception as e:
+        st.error(f"Dashboard Sync Error: {e}")
