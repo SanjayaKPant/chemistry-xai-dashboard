@@ -1,51 +1,68 @@
 import streamlit as st
+import gspread
+from google.oauth2.service_account import Credentials
 import pandas as pd
-from streamlit_gsheets import GSheetsConnection
 
-# 1. Establish secure connection
-conn = st.connection("gsheets", type=GSheetsConnection)
+# --- 1. ESTABLISH ROBUST CONNECTION ---
+def get_gspread_client():
+    scope = ["https://www.googleapis.com/auth/spreadsheets"]
+    # Map Streamlit secrets to the expected Google format
+    secret_dict = {
+        "type": st.secrets["gsheets"]["type"],
+        "project_id": st.secrets["gsheets"]["project_id"],
+        "private_key_id": st.secrets["gsheets"]["private_key_id"],
+        "private_key": st.secrets["gsheets"]["private_key"],
+        "client_email": st.secrets["gsheets"]["client_email"],
+        "client_id": st.secrets["gsheets"]["client_id"],
+        "auth_uri": st.secrets["gsheets"]["auth_uri"],
+        "token_uri": st.secrets["gsheets"]["token_uri"],
+        "auth_provider_x509_cert_url": st.secrets["gsheets"]["auth_provider_x509_cert_url"],
+        "client_x509_cert_url": st.secrets["gsheets"]["client_x509_cert_url"]
+    }
+    creds = Credentials.from_service_account_info(secret_dict, scopes=scope)
+    return gspread.authorize(creds)
 
-def save_quiz_responses(data_dict):
+# --- 2. UPDATED LOGIN LOGIC ---
+def check_login(user_id):
     try:
-        # Build DataFrame from the dictionary
-        df = pd.DataFrame([data_dict])
+        client = get_gspread_client()
+        # Open by URL to be 100% sure we hit the right file
+        sh = client.open_by_url(st.secrets["gsheets"]["spreadsheet"])
+        worksheet = sh.worksheet("Participants")
         
-        # Use the specific URL from secrets and explicitly set worksheet
-        # ttl=0 ensures we don't hit a cache error
-        conn.update(
-            spreadsheet=st.secrets["gsheets"]["spreadsheet"],
-            worksheet="Responses",
-            data=df
-        )
-        return True
+        # Get all records as a list of dicts
+        data = worksheet.get_all_records()
+        df = pd.DataFrame(data)
+        
+        df['User_ID'] = df['User_ID'].astype(str).str.strip()
+        user_row = df[df['User_ID'] == str(user_id).strip().upper()]
+        
+        if not user_row.empty:
+            st.session_state.user_data = user_row.iloc[0].to_dict()
+            st.session_state.logged_in = True
+            return True
+        return False
     except Exception as e:
-        st.error(f"Data Save Error: {e}")
+        st.error(f"Ultimate Connection Error: {e}")
         return False
 
-def log_temporal_trace(event_type, details=""):
-    if 'trace_buffer' not in st.session_state:
-        st.session_state.trace_buffer = []
-    
-    trace = {
-        "User_ID": st.session_state.get('user_data', {}).get('User_ID', 'Unknown'),
-        "Timestamp": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "Event": event_type,
-        "Details": str(details)
-    }
-    st.session_state.trace_buffer.append(trace)
-
-def save_temporal_traces(trace_buffer):
-    if not trace_buffer:
-        return True
+# --- 3. UPDATED SAVE LOGIC ---
+def save_quiz_responses(quiz_data):
     try:
-        new_traces_df = pd.DataFrame(trace_buffer)
-        conn.update(
-            spreadsheet=st.secrets["gsheets"]["spreadsheet"],
-            worksheet="Temporal_Traces",
-            data=new_traces_df
-        )
-        st.session_state.trace_buffer = []
+        client = get_gspread_client()
+        sh = client.open_by_url(st.secrets["gsheets"]["spreadsheet"])
+        worksheet = sh.worksheet("Responses")
+        # Append row: Values must be in the exact order of your sheet headers
+        row_to_add = [
+            quiz_data["User_ID"],
+            quiz_data["Timestamp"],
+            quiz_data["Tier_1"],
+            quiz_data["Tier_2"],
+            quiz_data["Tier_3"],
+            quiz_data["Tier_4"]
+        ]
+        worksheet.append_row(row_to_add)
         return True
     except Exception as e:
-        st.error(f"Trace Sync Error: {e}")
+        st.error(f"Save Error: {e}")
         return False
