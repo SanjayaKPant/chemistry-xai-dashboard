@@ -6,7 +6,7 @@ import pandas as pd
 # --- 1. ESTABLISH ROBUST CONNECTION ---
 def get_gspread_client():
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
-    # Map Streamlit secrets to the expected Google format
+    # Using the TOML keys we set up in Streamlit Secrets
     secret_dict = {
         "type": st.secrets["gsheets"]["type"],
         "project_id": st.secrets["gsheets"]["project_id"],
@@ -22,19 +22,20 @@ def get_gspread_client():
     creds = Credentials.from_service_account_info(secret_dict, scopes=scope)
     return gspread.authorize(creds)
 
-# --- 2. UPDATED LOGIN LOGIC ---
+# --- 2. AUTHENTICATION (check_login) ---
 def check_login(user_id):
     try:
         client = get_gspread_client()
-        # Open by URL to be 100% sure we hit the right file
         sh = client.open_by_url(st.secrets["gsheets"]["spreadsheet"])
         worksheet = sh.worksheet("Participants")
         
-        # Get all records as a list of dicts
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
         
+        # Clean headers and data
+        df.columns = df.columns.str.strip()
         df['User_ID'] = df['User_ID'].astype(str).str.strip()
+        
         user_row = df[df['User_ID'] == str(user_id).strip().upper()]
         
         if not user_row.empty:
@@ -43,26 +44,43 @@ def check_login(user_id):
             return True
         return False
     except Exception as e:
-        st.error(f"Ultimate Connection Error: {e}")
+        st.error(f"Gspread Login Error: {e}")
         return False
 
-# --- 3. UPDATED SAVE LOGIC ---
+# --- 3. SAVE RESPONSES (save_quiz_responses) ---
 def save_quiz_responses(quiz_data):
     try:
         client = get_gspread_client()
         sh = client.open_by_url(st.secrets["gsheets"]["spreadsheet"])
         worksheet = sh.worksheet("Responses")
-        # Append row: Values must be in the exact order of your sheet headers
+        
         row_to_add = [
-            quiz_data["User_ID"],
-            quiz_data["Timestamp"],
-            quiz_data["Tier_1"],
-            quiz_data["Tier_2"],
-            quiz_data["Tier_3"],
-            quiz_data["Tier_4"]
+            quiz_data.get("User_ID"),
+            quiz_data.get("Timestamp"),
+            quiz_data.get("Tier_1"),
+            quiz_data.get("Tier_2"),
+            quiz_data.get("Tier_3"),
+            quiz_data.get("Tier_4")
         ]
         worksheet.append_row(row_to_add)
         return True
     except Exception as e:
-        st.error(f"Save Error: {e}")
+        st.error(f"Save Responses Error: {e}")
+        return False
+
+# --- 4. SAVE TRACES (save_temporal_traces) ---
+def save_temporal_traces(trace_buffer):
+    if not trace_buffer:
+        return True
+    try:
+        client = get_gspread_client()
+        sh = client.open_by_url(st.secrets["gsheets"]["spreadsheet"])
+        worksheet = sh.worksheet("Temporal_Traces")
+        
+        for trace in trace_buffer:
+            row = [trace.get("User_ID"), trace.get("Timestamp"), trace.get("Event"), trace.get("Details")]
+            worksheet.append_row(row)
+        return True
+    except Exception as e:
+        st.error(f"Trace Sync Error: {e}")
         return False
