@@ -98,3 +98,23 @@ else:
     else:
         from admin_dashboard import show_admin_portal
         show_admin_portal()
+
+# --- 5. FINALLY SUBMIT BUTTON ---
+if st.button("Submit Research Data", key="final_submit"):
+    if not tier1_choice:
+        st.warning("Please answer Tier 1.")
+    else:
+        quiz_data = {
+            "User_ID": st.session_state.user_data['User_ID'],
+            "Timestamp": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "Tier_1": tier1_choice,
+            "Tier_2": tier2_conf,
+            "Tier_3": tier3_reason,
+            "Tier_4": tier4_conf
+        }
+        
+        # Save to Google Sheets
+        if save_quiz_responses(quiz_data):
+            save_temporal_traces(st.session_state.trace_buffer)
+            st.success("Research & Temporal Traces Synced to Google Drive!")
+            st.balloons()
