@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from database_manager import conn, save_quiz_responses, log_temporal_trace, save_temporal_traces
+# Note: 'conn' is removed because gspread handles connection internally
+from database_manager import check_login, save_quiz_responses, save_temporal_traces
 from research_engine import get_agentic_hint
 
 # --- 1. CONFIGURATION & SESSION STATE ---
@@ -14,28 +15,17 @@ if 'user_data' not in st.session_state:
 if 'trace_buffer' not in st.session_state:
     st.session_state.trace_buffer = []
 
-# --- 2. AUTHENTICATION LOGIC ---
-def check_login(user_id):
-    try:
-        df = conn.read(
-            spreadsheet=st.secrets["gsheets"]["spreadsheet"],
-            worksheet="Participants",
-            ttl=0
-        )
-        df['User_ID'] = df['User_ID'].astype(str)
-        user_row = df[df['User_ID'] == str(user_id)]
-        
-        if not user_row.empty:
-            st.session_state.user_data = user_row.iloc[0].to_dict()
-            st.session_state.logged_in = True
-            log_temporal_trace("LOGIN_SUCCESS", details=user_id)
-            return True
-        else:
-            st.error("User ID not found.")
-            return False
-    except Exception as e:
-        st.error(f"Login Connection Error: {e}")
-        return False
+# --- 2. TEMPORAL TRACE HELPER ---
+# Moved here to ensure it has direct access to session_state
+def log_temporal_trace(event_type, details=""):
+    user_id = st.session_state.user_data.get('User_ID', 'Unknown') if st.session_state.user_data else "Unknown"
+    trace = {
+        "User_ID": user_id,
+        "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "Event": event_type,
+        "Details": str(details)
+    }
+    st.session_state.trace_buffer.append(trace)
 
 # --- 3. QUIZ INTERFACE FUNCTION ---
 def show_quiz():
@@ -48,7 +38,8 @@ def show_quiz():
 
     # --- AGENTIC SCAFFOLDING ---
     if t1 != "Select...":
-        if user['Group'] == "Exp_A" or user['User_ID'] == "S001":
+        # Check experimental group status
+        if user.get('Group') == "Exp_A" or user.get('User_ID') == "S001":
             hint = get_agentic_hint("atom_structure_01", t1)
             if hint:
                 st.info(f"🤖 **AI Tutor:** {hint}")
@@ -78,7 +69,8 @@ def show_quiz():
                 "Tier_3": t3, 
                 "Tier_4": t4
             }
-            # Note: We don't pass 'conn' here because database_manager handles it internally
+            
+            # Using the new robust gspread saving logic
             if save_quiz_responses(quiz_data):
                 save_temporal_traces(st.session_state.trace_buffer)
                 st.success("✅ Assessment & Temporal Traces Synced to Google Drive!")
@@ -89,19 +81,29 @@ if not st.session_state.logged_in:
     st.title("🔐 Researcher Login")
     u_id = st.text_input("Enter User ID (e.g., S001):").upper()
     if st.button("Login"):
+        # This now triggers the gspread handshake in database_manager.py
         if check_login(u_id):
+            log_temporal_trace("LOGIN_SUCCESS", details=u_id)
             st.rerun()
+        else:
+            # Error message is already handled inside check_login via st.error
+            pass
 else:
     with st.sidebar:
-        st.write(f"👤 **User:** {st.session_state.user_data['Name']}")
-        st.write(f"📊 **Group:** {st.session_state.user_data['Group']}")
+        st.write(f"👤 **User:** {st.session_state.user_data.get('Name', 'Unknown')}")
+        st.write(f"📊 **Group:** {st.session_state.user_data.get('Group', 'Unknown')}")
         page = st.selectbox("Go to:", ["Quiz", "Research Dashboard"])
         if st.button("Logout"):
             st.session_state.logged_in = False
+            st.session_state.user_data = None
             st.rerun()
 
     if page == "Quiz":
         show_quiz()
     else:
-        from admin_dashboard import show_admin_portal
-        show_admin_portal()
+        # Import only when needed to prevent circular import issues
+        try:
+            from admin_dashboard import show_admin_portal
+            show_admin_portal()
+        except ImportError:
+            st.error("Admin Dashboard module not found.")
