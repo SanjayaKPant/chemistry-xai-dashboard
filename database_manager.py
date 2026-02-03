@@ -5,11 +5,39 @@ from google.oauth2.service_account import Credentials
 
 # --- HARDCODED CREDENTIALS TO BYPASS SECRETS BOX ERRORS ---
 def get_service_account_info():
+    # The 'r' before the quotes tells Python: "This is a Raw string, do not process backslashes"
     return {
         "type": "service_account",
         "project_id": "chem-xai-project",
         "private_key_id": "09d9edc434243d5f48924e6dfb83331401965d8e",
-        "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDhcHL6DXQMvtZE\nEdp+wDqdQhh//mAe+ITZFMBVnhmYiT5Sq0CnWACyRyWKbOcx2y3mAUj7vwDmYBD0\n3KdNyLh2uEzgYFzpo7fU/LLP2O5tb9vBtRH4rZDCCGMEeYjI+LosT0oa0SCobF3P\njmEKQ7ZF9ftysHh0buTYzR0Y2ZsIJJpNLba1jOjPMfLfm3KffTf8mKsI0rncYlqw\npuWJ8GqmK5sRBnNUtE+5DvtakKDFHqi5CiJsHfhDshQZrGJxdfMoQePgcN715bWZ\ksf8ETT8Ix6Jn3WVfX56Tgw0KANPRGf+XpSdiJP3FX+jbnSdEYbxjuz8zFXMJSdL\n6qfnPHa7AgMBAAECggEAaS7PnmZ/gmDZ1MmlsaTb1Dqd9r4HN/wI88XwVSIeXCKQ\rv6S/GEddhCm7daQ6hyS5jEsTbUY5OPmlXCMKMkhc9bam4eqYiJOZ7P9c+eJmwrp\nNBBZEbddhoJmPJS94tLV/k2CTE/Nlnd1L52FHkZoeWzjBGhc0ypYYOUWkd0ZreqR\nb+MeAYcfj+KttTDih8pLb4bCximDX7HDEfzfiTGtLAgQqsBmmHylznjUBfMIJA0s\nIR8HVqmDqaUyjm3Q4BVjx8+FX6qDxSSS+KOEzHYCR2nXbR8g9AydRs2EFTZzxPp9\n1YGKQaxrgMCaI2OoxTGSIHkB3+FZ2ySY/2IRunZTFQKBgQD/goUZxhkDAdf1OJIL\ni9auxZmpsBnauBAUzqr4ZaY0eVqihu/VzY7oSuOFCQZSPcoSpX4Y0KVxK/QVeQBS\nlhpD+BZ0BUKP6HwlTFLB+Mok8RmNdHeUTPNxd7Fom56Em2Ulgn7HtpJqJdR7XdlP\nGNTXIPmS82J2mDInA6dY2BsaZQKBgQDh3ylgvP4Zue0TlaBDWetrmYsT12HeJeX9\nQ8AlCKbOA+H9ZIJhBe+3DHYURQxsDFczdlmP4w3YyGieJUv1noyB/US/p2iImOCT\nyXfSAUuE0q3Z2HC61SqALsGArpbOjG/frgQlXn5l4uKHgF6WhWkV/QWRwSbHj1pO\n7SkdlWCqnwKBgBOxQIbjAKx9qOJKcN8Y8PvZWOV+IA/+Xabs4rpwQyYKMFUUZ0mo\nJRp8IxruviD6iCd1v8kz03xsccxx3fd/gBi69ygL+7xRo7fQMRSoExRTzK9dSZYR\ndDXLjs3MKKR5wYrpitHjnVc3ATBc5FG3TTgjX3jW70DKrBrbqjsrtLMNAoGADVPY\noi+koqn41i3+/dphbMDrlukfijccQfxsawL+rKtH+2ah1s293kQq93k3iWyU/KFg\GYBhQchZe/NhbwXC7qyeENz06xJyNeYuXsLazOSNg4wk4rFPR676lfg3R8q7kyw2\nbGoN9T8U9L/bVPBcSgLbAEWwXxgTURLnWSqGQKsCgYAL32sLF2sXQoYjl1KUZGH9\n/qareoRn5KqmUjhnIGm7o+f4A3qR8C8NbRZA4O08PLRrhpBqladObo7gSnmSysY9\nu4vYn4PWHUXiJYtC35H8TduXufDMYjENJLXnP34x/shKvDhSG8gP/IIK2P+d8+UG\nS8BH4qZqElxTO1JRtdp+/A==\n-----END PRIVATE KEY-----\n",
+        "private_key": r"""-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDhcHL6DXQMvtZE
+Edp+wDqdQhh//mAe+ITZFMBVnhmYiT5Sq0CnWACyRyWKbOcx2y3mAUj7vwDmYBD0
+3KdNyLh2uEzgYFzpo7fU/LLP2O5tb9vBtRH4rZDCCGMEeYjI+LosT0oa0SCobF3P
+jmEKQ7ZF9ftysHh0buTYzR0Y2ZsIJJpNLba1jOjPMfLfm3KffTf8mKsI0rncYlqw
+puWJ8GqmK5sRBnNUtE+5DvtakKDFHqi5CiJsHfhDshQZrGJxdfMoQePgcN715bWZ
+ksf8ETT8Ix6Jn3WVfX56Tgw0KANPRGf+XpSdiJP3FX+jbnSdEYbxjuz8zFXMJSdL
+6qfnPHa7AgMBAAECggEAaS7PnmZ/gmDZ1MmlsaTb1Dqd9r4HN/wI88XwVSIeXCKQ
+rv6S/GEddhCm7daQ6hyS5jEsTbUY5OPmlXCMKMkhc9bam4eqYiJOZ7P9c+eJmwrp
+NBBZEbddhoJmPJS94tLV/k2CTE/Nlnd1L52FHkZoeWzjBGhc0ypYYOUWkd0ZreqR
+b+MeAYcfj+KttTDih8pLb4bCximDX7HDEfzfiTGtLAgQqsBmmHylznjUBfMIJA0s
+IR8HVqmDqaUyjm3Q4BVjx8+FX6qDxSSS+KOEzHYCR2nXbR8g9AydRs2EFTZzxPp9
+1YGKQaxrgMCaI2OoxTGSIHkB3+FZ2ySY/2IRunZTFQKBgQD/goUZxhkDAdf1OJIL
+i9auxZmpsBnauBAUzqr4ZaY0eVqihu/VzY7oSuOFCQZSPcoSpX4Y0KVxK/QVeQBS
+lhpD+BZ0BUKP6HwlTFLB+Mok8RmNdHeUTPNxd7Fom56Em2Ulgn7HtpJqJdR7XdlP
+GNTXIPmS82J2mDInA6dY2BsaZQKBgQDh3ylgvP4Zue0TlaBDWetrmYsT12HeJeX9
+Q8AlCKbOA+H9ZIJhBe+3DHYURQxsDFczdlmP4w3YyGieJUv1noyB/US/p2iImOCT
+yXfSAUuE0q3Z2HC61SqALsGArpbOjG/frgQlXn5l4uKHgF6WhWkV/QWRwSbHj1pO
+7SkdlWCqnwKBgBOxQIbjAKx9qOJKcN8Y8PvZWOV+IA/+Xabs4rpwQyYKMFUUZ0mo
+JRp8IxruviD6iCd1v8kz03xsccxx3fd/gBi69ygL+7xRo7fQMRSoExRTzK9dSZYR
+dDXLjs3MKKR5wYrpitHjnVc3ATBc5FG3TTgjX3jW70DKrBrbqjsrtLMNAoGADVPY
+oi+koqn41i3+/dphbMDrlukfijccQfxsawL+rKtH+2ah1s293kQq93k3iWyU/KFg
+GYBhQchZe/NhbwXC7qyeENz06xJyNeYuXsLazOSNg4wk4rFPR676lfg3R8q7kyw2
+nbGoN9T8U9L/bVPBcSgLbAEWwXxgTURLnWSqGQKsCgYAL32sLF2sXQoYjl1KUZGH9
+/qareoRn5KqmUjhnIGm7o+f4A3qR8C8NbRZA4O08PLRrhpBqladObo7gSnmSysY9
+nu4vYn4PWHUXiJYtC35H8TduXufDMYjENJLXnP34x/shKvDhSG8gP/IIK2P+d8+UG
+S8BH4qZqElxTO1JRtdp+/A==
+-----END PRIVATE KEY-----""",
         "client_email": "streamlit-research-access@chem-xai-project.iam.gserviceaccount.com",
         "client_id": "116425675333935406982",
         "auth_uri": "https://accounts.google.com/o/oauth2/auth",
