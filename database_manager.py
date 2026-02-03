@@ -8,12 +8,22 @@ def get_gspread_client():
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
     
     try:
-        # Build the dictionary exactly as stored in secrets
+        # Get the raw string from secrets
+        raw_key = st.secrets["private_key"]
+        
+        # MANUALLY RECONSTRUCT THE PEM FILE
+        # 1. Remove any accidental spaces
+        raw_key = raw_key.strip().replace(" ", "")
+        # 2. Add newlines every 64 characters (Standard PEM format)
+        formatted_key = "\n".join([raw_key[i:i+64] for i in range(0, len(raw_key), 64)])
+        # 3. Add the headers
+        final_key = f"-----BEGIN PRIVATE KEY-----\n{formatted_key}\n-----END PRIVATE KEY-----\n"
+
         creds_info = {
             "type": st.secrets["type"],
             "project_id": st.secrets["project_id"],
             "private_key_id": st.secrets["private_key_id"],
-            "private_key": st.secrets["private_key"], # No more .replace() needed
+            "private_key": final_key, 
             "client_email": st.secrets["client_email"],
             "client_id": st.secrets["client_id"],
             "auth_uri": st.secrets["auth_uri"],
@@ -26,8 +36,9 @@ def get_gspread_client():
         credentials = Credentials.from_service_account_info(creds_info, scopes=scope)
         return gspread.authorize(credentials)
     except Exception as e:
-        st.error(f"Authentication Setup Error: {e}")
+        st.error(f"Manual Reconstruction Error: {e}")
         return None
+
 def check_login(user_id):
     """Checks if the User ID exists in the 'Participants' tab."""
     client = get_gspread_client()
