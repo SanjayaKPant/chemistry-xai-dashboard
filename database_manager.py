@@ -7,20 +7,27 @@ import pandas as pd
 def get_gspread_client():
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
     
-    # Get the credentials dictionary from secrets
-    creds_info = dict(st.secrets["gcp_service_account"])
-    
-    # THE REPAIR: Convert literal "\n" text back into actual newlines
-    if "private_key" in creds_info:
-        creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
-    
+    # Directly build the credential dictionary from the flat secrets
     try:
+        creds_info = {
+            "type": st.secrets["type"],
+            "project_id": st.secrets["project_id"],
+            "private_key_id": st.secrets["private_key_id"],
+            # Fix the formatting of the key on the fly
+            "private_key": st.secrets["private_key"].replace("\\n", "\n"),
+            "client_email": st.secrets["client_email"],
+            "client_id": st.secrets["client_id"],
+            "auth_uri": st.secrets["auth_uri"],
+            "token_uri": st.secrets["token_uri"],
+            "auth_provider_x509_cert_url": st.secrets["auth_provider_x509_cert_url"],
+            "client_x509_cert_url": st.secrets["client_x509_cert_url"]
+        }
+        
         from google.oauth2.service_account import Credentials
         credentials = Credentials.from_service_account_info(creds_info, scopes=scope)
         return gspread.authorize(credentials)
     except Exception as e:
-        # This will now show the actual underlying error if it persists
-        st.error(f"PEM Loader Error: {e}")
+        st.error(f"Authentication Setup Error: {e}")
         return None
 def check_login(user_id):
     """Checks if the User ID exists in the 'Participants' tab."""
