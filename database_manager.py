@@ -85,3 +85,15 @@ def save_temporal_traces(trace_buffer):
     except Exception as e:
         st.error(f"Trace Sync Error: {e}")
         return False
+    def analyze_reasoning_quality(text):
+    """Simple NLP Keyword Analysis for Scientific Reasoning."""
+    # Define keywords that indicate high-level scientific conceptualization
+    scientific_lexicon = ["probability", "orbital", "cloud", "subatomic", "quantum", "attraction", "uncertainty"]
+    text_lower = text.lower()
+    
+    # Count how many unique key terms are used
+    found_terms = [term for term in scientific_lexicon if term in text_lower]
+    score = len(found_terms)
+    
+    return score, ", ".join(found_terms)
+    
