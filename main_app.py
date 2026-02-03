@@ -5,7 +5,7 @@ from datetime import datetime
 from research_engine import get_agentic_hint
 from database_manager import check_login, save_quiz_responses, save_temporal_traces, analyze_reasoning_quality
 
-# --- 2. CONFIGURATION & UI ---
+# --- CONFIGURATION ---
 st.set_page_config(page_title="Chem-XAI Research Lab", page_icon="🧪", layout="wide")
 
 st.markdown("""
@@ -24,7 +24,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. SESSION STATE ---
+# --- SESSION STATE ---
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'user_data' not in st.session_state: st.session_state.user_data = None
 if 'trace_buffer' not in st.session_state: st.session_state.trace_buffer = []
@@ -40,7 +40,7 @@ def log_temporal_trace(event_type, details=""):
         "Event": event_type, "Details": str(details)
     })
 
-# --- 4. STUDENT INTERFACE ---
+# --- STUDENT INTERFACE ---
 def show_quiz():
     user = st.session_state.user_data
     st.title("⚛️ Atomic Structure Journey")
@@ -80,6 +80,7 @@ def show_quiz():
 
             if st.button("🚀 Finalize & Submit Research Data"):
                 duration = round(time.time() - st.session_state.start_time, 2)
+                # Correctly calls the NLP quality function from your database_manager.py
                 score, keywords = analyze_reasoning_quality(t3)
                 
                 quiz_data = {
@@ -94,7 +95,7 @@ def show_quiz():
                     st.balloons()
                     st.session_state.trace_buffer = []
 
-# --- 5. ROUTING ---
+# --- ROUTING ---
 if not st.session_state.logged_in:
     st.title("🔐 Research Portal Login")
     u_id = st.text_input("Enter ID:").upper().strip()
