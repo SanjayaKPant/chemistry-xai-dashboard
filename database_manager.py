@@ -1,25 +1,33 @@
 import streamlit as st
 import gspread
 import pandas as pd
+import base64
 from google.oauth2.service_account import Credentials
 
 def get_gspread_client():
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
     try:
-        # Pull info and convert text \n into real newlines
-        info = dict(st.secrets)
-        info["private_key"] = info["private_key"].replace("\\n", "\n")
+        # Decode the Base64 key into a standard string in-memory
+        encoded_key = st.secrets["private_key_base64"]
+        decoded_key = base64.b64decode(encoded_key).decode("utf-8")
         
-        # Ensure only Google credentials remain in the dict
-        valid_keys = ["type", "project_id", "private_key_id", "private_key", 
-                      "client_email", "client_id", "auth_uri", "token_uri", 
-                      "auth_provider_x509_cert_url", "client_x509_cert_url"]
-        creds_dict = {k: info[k] for k in valid_keys if k in info}
+        creds_info = {
+            "type": st.secrets["type"],
+            "project_id": st.secrets["project_id"],
+            "private_key_id": st.secrets["private_key_id"],
+            "private_key": decoded_key,
+            "client_email": st.secrets["client_email"],
+            "client_id": st.secrets["client_id"],
+            "auth_uri": st.secrets["auth_uri"],
+            "token_uri": st.secrets["token_uri"],
+            "auth_provider_x509_cert_url": st.secrets["auth_provider_x509_cert_url"],
+            "client_x509_cert_url": st.secrets["client_x509_cert_url"]
+        }
         
-        credentials = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        credentials = Credentials.from_service_account_info(creds_info, scopes=scope)
         return gspread.authorize(credentials)
     except Exception as e:
-        st.error(f"Morning Auth Attempt Failed: {e}")
+        st.error(f"Base64 Auth Failed: {e}")
         return None
 
 def check_login(user_id):
@@ -29,13 +37,12 @@ def check_login(user_id):
         sh = client.open_by_key(st.secrets["private_gsheets_url"])
         worksheet = sh.worksheet("Participants") 
         data = pd.DataFrame(worksheet.get_all_records())
-        # Convert everything to string for a reliable match
         return str(user_id) in data['User_ID'].astype(str).values
     except Exception as e:
         st.error(f"Sheet Access Error: {e}")
         return False
 
-# Function placeholders for main_app.py
+# Function placeholders
 def save_quiz_responses(u, r): pass
 def save_temporal_traces(u, t): pass
 def analyze_reasoning_quality(r): return "Pending"
