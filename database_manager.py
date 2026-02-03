@@ -7,14 +7,13 @@ import pandas as pd
 def get_gspread_client():
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
     
-    # Directly build the credential dictionary from the flat secrets
     try:
+        # Build the dictionary exactly as stored in secrets
         creds_info = {
             "type": st.secrets["type"],
             "project_id": st.secrets["project_id"],
             "private_key_id": st.secrets["private_key_id"],
-            # Fix the formatting of the key on the fly
-            "private_key": st.secrets["private_key"].replace("\\n", "\n"),
+            "private_key": st.secrets["private_key"], # No more .replace() needed
             "client_email": st.secrets["client_email"],
             "client_id": st.secrets["client_id"],
             "auth_uri": st.secrets["auth_uri"],
