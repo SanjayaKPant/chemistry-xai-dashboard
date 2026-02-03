@@ -53,13 +53,22 @@ def show_quiz():
         t1 = st.radio("Where are electrons primarily located?", 
                       ["Select...", "Inside the Nucleus", "In the Electron Cloud"], key="q1")
 
-    # BLOCK 2: AI Chatbot Scaffolding
+# BLOCK 2: High-Impact Adaptive Scaffolding
     if t1 != "Select...":
         if user.get('Group') == "Exp_A" or user.get('User_ID') == "S001":
-            hint = get_agentic_hint("atom_structure_01", t1)
-            if hint:
-                st.markdown(f'<div class="ai-chat-bubble">🤖 <b>AI Tutor:</b> {hint}</div>', unsafe_allow_html=True)
-                log_temporal_trace("HINT_VIEWED", details=t1)
+            st.markdown(f'<div class="ai-chat-bubble">🤖 <b>AI Tutor:</b> I noticed your answer, {user.get("Name")}. Would you like to explore a hint before writing your reasoning?</div>', unsafe_allow_html=True)
+            
+            # Create two columns for hint choices to gather granular research data
+            h_col1, h_col2 = st.columns(2)
+            with h_col1:
+                if st.button("💡 Get a Socratic Clue"):
+                    log_temporal_trace("HINT_SOCRATIC_CLICKED", details=t1)
+                    st.info("🔍 **Think about space:** If an atom was the size of a football stadium, and the nucleus was a marble in the center, where would the electrons be?")
+            
+            with h_col2:
+                if st.button("📖 See an Analogy"):
+                    log_temporal_trace("HINT_ANALOGY_CLICKED", details=t1)
+                    st.info("🐝 **The Beehive Model:** Imagine bees swarming around a hive. They move so fast they look like a blurry cloud. Are they inside the hive, or in the space around it?")
 
         st.divider()
         # BLOCK 3: Grid for Certainty and Reasoning
