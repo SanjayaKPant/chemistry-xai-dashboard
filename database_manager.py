@@ -96,4 +96,15 @@ def save_temporal_traces(trace_buffer):
     score = len(found_terms)
     
     return score, ", ".join(found_terms)
+
+def analyze_reasoning_quality(text):
+    """Categorizes student reasoning for high-impact research analysis."""
+    # Scientific lexicon for Atomic Structure (Quantum Mechanical Model focus)
+    lexicon = ["probability", "orbital", "cloud", "subatomic", "quantum", "attraction", "uncertainty"]
+    text_lower = text.lower()
+    
+    found_terms = [term for term in lexicon if term in text_lower]
+    score = len(found_terms)
+    
+    return score, ", ".join(found_terms)
     
