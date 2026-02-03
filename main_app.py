@@ -7,7 +7,6 @@ from datetime import datetime
 try:
     from database_manager import check_login, save_quiz_responses, save_temporal_traces, analyze_reasoning_quality
 except ImportError:
-    # Fallback: if the NLP function isn't in your database_manager yet, the app won't crash
     from database_manager import check_login, save_quiz_responses, save_temporal_traces
     def analyze_reasoning_quality(text): return 0, "none"
 
@@ -71,8 +70,70 @@ def show_quiz():
             with h_col1:
                 if st.button("💡 Get a Socratic Clue"):
                     log_temporal_trace("HINT_SOCRATIC_CLICKED", details=t1)
-                    st.info("🔍 **Think about space:** If an atom was a stadium, and the nucleus was a marble, where would the electrons be?")
+                    st.info("""🔍 **Think about space:** If an atom was a stadium, and the nucleus 
+                            was a marble in the center, where would the electrons be?""")
             with h_col2:
                 if st.button("📖 See an Analogy"):
                     log_temporal_trace("HINT_ANALOGY_CLICKED", details=t1)
-                    st.info("🐝 **The Beehive Model:** Imagine bees swarming so fast they look like a blurry cloud. Are they inside the hive
+                    # TRIPLE QUOTES FIX APPLIED HERE
+                    st.info("""🐝 **The Beehive Model:** Imagine bees swarming so fast they look like 
+                            a blurry cloud. Are they inside the hive or in the space around it?""")
+
+        st.divider()
+        col_cert, col_reas = st.columns(2)
+        with col_cert:
+            st.markdown("### Step 2: Certainty")
+            t2 = st.select_slider("How sure are you?", options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q2")
+        with col_reas:
+            st.markdown("### Step 3: Reasoning")
+            t3 = st.text_area("Why did you choose that answer?", placeholder="Explain your thinking...", key="q3")
+
+        if t3.strip():
+            st.divider()
+            st.subheader("Step 4: Explanation Confidence")
+            t4 = st.select_slider("How confident is your reasoning?", options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q4")
+
+            if st.button("🚀 Finalize & Submit Research Data"):
+                duration = round(time.time() - st.session_state.start_time, 2)
+                score, keywords = analyze_reasoning_quality(t3)
+                
+                quiz_data = {
+                    "User_ID": user['User_ID'], 
+                    "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "Tier_1": t1, "Tier_2": t2, "Tier_3": t3, "Tier_4": t4,
+                    "NLP_Score": score, "Keywords": keywords, "Total_Time": duration
+                }
+                
+                try:
+                    with st.spinner("Syncing..."):
+                        if save_quiz_responses(quiz_data):
+                            save_temporal_traces(st.session_state.get('trace_buffer', []))
+                            st.success(f"✅ Synced! Score: {score}/7")
+                            st.balloons()
+                            st.session_state.trace_buffer = []
+                except Exception as e:
+                    st.error(f"Error: {e}")
+
+# --- 5. LOGIN & ROUTING ---
+if not st.session_state.logged_in:
+    st.title("🔐 Research Portal Login")
+    u_id = st.text_input("Enter ID:").upper().strip()
+    if st.button("Login"):
+        if check_login(u_id):
+            st.session_state.start_time = time.time()
+            st.rerun()
+else:
+    user = st.session_state.user_data
+    if user.get('Role') == 'Admin':
+        from admin_dashboard import show_admin_portal
+        show_admin_portal() 
+        if st.sidebar.button("Logout"):
+            st.session_state.logged_in = False
+            st.rerun()
+    else:
+        with st.sidebar:
+            st.header(f"👤 {user.get('Name')}")
+            if st.button("Logout"):
+                st.session_state.logged_in = False
+                st.rerun()
+        show_quiz()
