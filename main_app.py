@@ -88,12 +88,30 @@ def show_quiz():
             t4 = st.select_slider("How confident is your scientific reasoning?", 
                                  options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q4")
 
-            if st.button("🚀 Finalize & Submit Research Data"):
+         if st.button("🚀 Finalize & Submit Research Data"):
                 duration = round(time.time() - st.session_state.start_time, 2)
+                
+                # NLP Analysis of Tier 3 Reasoning
+                score, keywords_found = analyze_reasoning_quality(t3)
+                
                 quiz_data = {
-                    "User_ID": user['User_ID'], "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "Tier_1": t1, "Tier_2": t2, "Tier_3": t3, "Tier_4": t4
+                    "User_ID": user['User_ID'], 
+                    "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "Tier_1": t1, "Tier_2": t2, "Tier_3": t3, "Tier_4": t4,
+                    "NLP_Score": score,          # NEW COLUMN
+                    "Keywords": keywords_found   # NEW COLUMN
                 }
+                
+                current_traces = st.session_state.get('trace_buffer', [])
+                try:
+                    with st.spinner("Syncing to Cloud..."):
+                        if save_quiz_responses(quiz_data):
+                            save_temporal_traces(current_traces)
+                            st.success(f"✅ Assessment Synced! Quality Score: {score}/7")
+                            st.balloons()
+                            st.session_state.trace_buffer = [] 
+                except Exception as e:
+                    st.error(f"Submission Error: {e}")
                 
                 # Robust error handling for the buffer
                 current_traces = st.session_state.get('trace_buffer', [])
