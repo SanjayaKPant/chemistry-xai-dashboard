@@ -13,16 +13,33 @@ def get_gspread_client():
 def check_login(user_id):
     try:
         client = get_gspread_client()
-        sheet = client.open_by_key(st.secrets["private_gsheets_url"]).worksheet("Participants")
-        records = pd.DataFrame(sheet.get_all_records())
+        sheet_id = st.secrets["private_gsheets_url"]
+        
+        # Step 1: Try to open the Spreadsheet
+        try:
+            sh = client.open_by_key(sheet_id)
+        except Exception:
+            return st.error(f"❌ Spreadsheet ID not found. Check if the ID '{sheet_id}' is correct and shared with the client_email.")
+
+        # Step 2: Try to open the Worksheet
+        try:
+            worksheet = sh.worksheet("Participants")
+        except Exception:
+            return st.error("❌ Worksheet 'Participants' not found. Check your Tab names at the bottom of the Google Sheet.")
+
+        records = pd.DataFrame(worksheet.get_all_records())
         user = records[records['User_ID'] == user_id]
+        
         if not user.empty:
             st.session_state.user_data = user.iloc[0].to_dict()
             st.session_state.logged_in = True
             return True
-        return False
+        else:
+            st.warning("User ID not found in the 'Participants' list.")
+            return False
+            
     except Exception as e:
-        st.error(f"Login Sync Error: {e}")
+        st.error(f"General Sync Error: {e}")
         return False
 
 def save_quiz_responses(data):
