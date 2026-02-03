@@ -4,12 +4,21 @@ from google.oauth2.service_account import Credentials
 import pandas as pd
 
 def get_gspread_client():
-    # This matches the structure of the secrets required by your KeyError logs
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
-    creds_dict = st.secrets["gcp_service_account"]
-    credentials = Credentials.from_service_account_info(creds_dict, scopes=scope)
-    return gspread.authorize(credentials)
-
+    
+    # Create a copy of the secrets so we don't modify the original
+    creds_dict = dict(st.secrets["gcp_service_account"])
+    
+    # THE FIX: Manually replace literal '\n' text with actual newline characters
+    if "private_key" in creds_dict:
+        creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+    
+    try:
+        credentials = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        return gspread.authorize(credentials)
+    except Exception as e:
+        st.error(f"Credential Authorization Failed: {e}")
+        raise e
 def check_login(user_id):
     try:
         client = get_gspread_client()
