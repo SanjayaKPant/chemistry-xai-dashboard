@@ -6,17 +6,19 @@ import pandas as pd
 
 import base64
 
+import streamlit as st
+import gspread
+from google.oauth2.service_account import Credentials
+
 def get_gspread_client():
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
     try:
-        # Decode the Base64 key into a standard string
-        decoded_key = base64.b64decode(st.secrets["private_key"]).decode("utf-8")
-        
+        # Build the credentials info exactly as it appears in secrets
         creds_info = {
             "type": st.secrets["type"],
             "project_id": st.secrets["project_id"],
             "private_key_id": st.secrets["private_key_id"],
-            "private_key": decoded_key,
+            "private_key": st.secrets["private_key"],
             "client_email": st.secrets["client_email"],
             "client_id": st.secrets["client_id"],
             "auth_uri": st.secrets["auth_uri"],
@@ -25,11 +27,10 @@ def get_gspread_client():
             "client_x509_cert_url": st.secrets["client_x509_cert_url"]
         }
         
-        from google.oauth2.service_account import Credentials
         credentials = Credentials.from_service_account_info(creds_info, scopes=scope)
         return gspread.authorize(credentials)
     except Exception as e:
-        st.error(f"Final Attempt Error: {e}")
+        st.error(f"Authentication Error: {e}")
         return None
 def check_login(user_id):
     """Checks if the User ID exists in the 'Participants' tab."""
