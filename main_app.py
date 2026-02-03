@@ -2,15 +2,8 @@ import streamlit as st
 import pandas as pd
 import time
 from datetime import datetime
-
-# --- 1. SAFE IMPORTS (Flattened to prevent Indentation Errors) ---
-try:
-    from database_manager import check_login, save_quiz_responses, save_temporal_traces, analyze_reasoning_quality
-except ImportError:
-    from database_manager import check_login, save_quiz_responses, save_temporal_traces
-    def analyze_reasoning_quality(text): return 0, "none"
-
 from research_engine import get_agentic_hint
+from database_manager import check_login, save_quiz_responses, save_temporal_traces, analyze_reasoning_quality
 
 # --- 2. CONFIGURATION & UI ---
 st.set_page_config(page_title="Chem-XAI Research Lab", page_icon="🧪", layout="wide")
@@ -57,7 +50,6 @@ def show_quiz():
                   ["Select...", "Inside the Nucleus", "In the Electron Cloud"], key="q1")
 
     if t1 != "Select...":
-        # Experimental Group Scaffolding
         if user.get('Group') == "Exp_A" or user.get('User_ID') == "S001":
             name = user.get("Name", "Student")
             st.markdown(f'<div class="ai-chat-bubble">🤖 <b>AI Tutor:</b> I noticed your answer, {name}. Would you like to explore a hint?</div>', unsafe_allow_html=True)
@@ -88,7 +80,7 @@ def show_quiz():
 
             if st.button("🚀 Finalize & Submit Research Data"):
                 duration = round(time.time() - st.session_state.start_time, 2)
-                score, keywords = analyze_reasoning_quality(t3) # Connected to database_manager.py
+                score, keywords = analyze_reasoning_quality(t3)
                 
                 quiz_data = {
                     "User_ID": user['User_ID'], "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
