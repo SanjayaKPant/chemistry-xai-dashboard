@@ -2,16 +2,18 @@ import streamlit as st
 import pandas as pd
 import time
 from datetime import datetime
-from research_engine import get_agentic_hint
 
-# --- 1. ROBUST IMPORTS ---
+# --- 1. SAFE IMPORTS (Bypasses Indentation Drift) ---
 try:
     from database_manager import check_login, save_quiz_responses, save_temporal_traces, analyze_reasoning_quality
 except ImportError:
+    # Fallback if analyze_reasoning_quality is missing or misspelled in your other file
     from database_manager import check_login, save_quiz_responses, save_temporal_traces
     def analyze_reasoning_quality(text): return 0, "none"
 
-# --- 2. CONFIGURATION ---
+from research_engine import get_agentic_hint
+
+# --- 2. CONFIGURATION & UI ---
 st.set_page_config(page_title="Chem-XAI Research Lab", page_icon="🧪", layout="wide")
 
 st.markdown("""
@@ -31,30 +33,39 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 3. SESSION STATE ---
-if 'logged_in' not in st.session_state: st.session_state.logged_in = False
-if 'user_data' not in st.session_state: st.session_state.user_data = None
-if 'trace_buffer' not in st.session_state: st.session_state.trace_buffer = []
-if 'start_time' not in st.session_state: st.session_state.start_time = time.time()
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+if 'user_data' not in st.session_state:
+    st.session_state.user_data = None
+if 'trace_buffer' not in st.session_state:
+    st.session_state.trace_buffer = []
+if 'start_time' not in st.session_state:
+    st.session_state.start_time = time.time()
 
 def log_temporal_trace(event_type, details=""):
-    if 'trace_buffer' not in st.session_state: st.session_state.trace_buffer = []
-    u_id = st.session_state.user_data.get('User_ID', 'Unknown') if st.session_state.user_data else "Unknown"
+    if 'trace_buffer' not in st.session_state:
+        st.session_state.trace_buffer = []
+    # Fetch User ID safely for research logging
+    u_data = st.session_state.get('user_data')
+    u_id = u_data.get('User_ID', 'Unknown') if u_data else "Unknown"
     st.session_state.trace_buffer.append({
         "User_ID": u_id, 
         "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "Event": event_type, "Details": str(details)
+        "Event": event_type, 
+        "Details": str(details)
     })
 
 # --- 4. STUDENT INTERFACE ---
 def show_quiz():
     user = st.session_state.user_data
     st.title("⚛️ Atomic Structure Journey")
-    st.subheader("Step 1: The Atomic Concept")
     
+    st.subheader("Step 1: The Atomic Concept")
     t1 = st.radio("Where are electrons primarily located?", 
                   ["Select...", "Inside the Nucleus", "In the Electron Cloud"], key="q1")
 
     if t1 != "Select...":
+        # Scaffolding logic: Only shows for Experimental Group (Exp_A)
         if user.get('Group') == "Exp_A" or user.get('User_ID') == "S001":
             name = user.get("Name", "Student")
             st.markdown(f'<div class="ai-chat-bubble">🤖 <b>AI Tutor:</b> I noticed your answer, {name}. Would you like to explore a hint?</div>', unsafe_allow_html=True)
@@ -73,7 +84,7 @@ def show_quiz():
         col_cert, col_reas = st.columns(2)
         with col_cert:
             st.markdown("### Step 2: Certainty")
-            t2 = st.select_slider("Confidence in Answer", options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q2")
+            t2 = st.select_slider("How sure are you?", options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q2")
         with col_reas:
             st.markdown("### Step 3: Reasoning")
             t3 = st.text_area("Why did you choose that answer?", placeholder="Explain your thinking...", key="q3")
@@ -85,12 +96,16 @@ def show_quiz():
 
             if st.button("🚀 Finalize & Submit Research Data"):
                 duration = round(time.time() - st.session_state.start_time, 2)
+                # Analyze student reasoning quality via NLP function in database_manager.py
                 score, keywords = analyze_reasoning_quality(t3)
+                
                 quiz_data = {
-                    "User_ID": user['User_ID'], "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "User_ID": user['User_ID'], 
+                    "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "Tier_1": t1, "Tier_2": t2, "Tier_3": t3, "Tier_4": t4,
                     "NLP_Score": score, "Keywords": keywords, "Total_Time": duration
                 }
+                
                 if save_quiz_responses(quiz_data):
                     save_temporal_traces(st.session_state.get('trace_buffer', []))
                     st.success(f"✅ Synced! Score: {score}/7")
@@ -109,7 +124,7 @@ else:
     user = st.session_state.user_data
     if user.get('Role') == 'Admin':
         from admin_dashboard import show_admin_portal
-        show_admin_portal()
+        show_admin_portal() 
     else:
         with st.sidebar:
             st.header(f"👤 {user.get('Name')}")
