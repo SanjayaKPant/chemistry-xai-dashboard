@@ -6,19 +6,20 @@ import pandas as pd
 def get_gspread_client():
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
     
-    # Load credentials from secrets
-    creds_dict = dict(st.secrets["gcp_service_account"])
+    # 1. Get secrets and convert to a mutable dictionary
+    creds_info = dict(st.secrets["gcp_service_account"])
     
-    # CRITICAL FIX: Manually fix newline escaping that breaks PEM loading
-    if "private_key" in creds_dict:
-        creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+    # 2. THE FIX: Explicitly replace the text string "\n" with actual newlines
+    # This prevents the InvalidByte error during PEM loading
+    if "private_key" in creds_info:
+        creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
     
     try:
-        from google.oauth2.service_account import Credentials
-        credentials = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        credentials = Credentials.from_service_account_info(creds_info, scopes=scope)
         return gspread.authorize(credentials)
     except Exception as e:
-        st.error(f"Failed to authorize Google Sheets: {e}")
+        # This will now show us a much cleaner error if it still fails
+        st.error(f"Authentication Error: {e}")
         return None
 def check_login(user_id):
     try:
