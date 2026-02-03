@@ -4,17 +4,13 @@ import time
 from datetime import datetime
 
 # --- 1. IMPORT ROBUSTNESS ---
+# Single-line imports are much safer against IndentationErrors
 try:
-    from database_manager import (
-        check_login, 
-        save_quiz_responses, 
-        save_temporal_traces, 
-        analyze_reasoning_quality
-    )
+    from database_manager import check_login, save_quiz_responses, save_temporal_traces, analyze_reasoning_quality
 except ImportError:
-    # Fallback to prevent crash if functions aren't updated yet
-    def analyze_reasoning_quality(text): return 0, "none"
+    # Fallback if analyze_reasoning_quality isn't in database_manager.py yet
     from database_manager import check_login, save_quiz_responses, save_temporal_traces
+    def analyze_reasoning_quality(text): return 0, "none"
 
 from research_engine import get_agentic_hint
 
@@ -57,16 +53,14 @@ def show_quiz():
     user = st.session_state.user_data
     st.title("⚛️ Atomic Structure Journey")
     
-    # BLOCK 1: Concept
     st.subheader("Step 1: The Atomic Concept")
     t1 = st.radio("Where are electrons primarily located?", 
                   ["Select...", "Inside the Nucleus", "In the Electron Cloud"], key="q1")
 
-    # BLOCK 2: Scaffolding (Experimental Group Only)
     if t1 != "Select...":
         if user.get('Group') == "Exp_A" or user.get('User_ID') == "S001":
             name = user.get("Name", "Student")
-            st.markdown(f'<div class="ai-chat-bubble">🤖 <b>AI Tutor:</b> I noticed your answer, {name}. Would you like to explore a hint before writing your reasoning?</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="ai-chat-bubble">🤖 <b>AI Tutor:</b> I noticed your answer, {name}. Would you like to explore a hint?</div>', unsafe_allow_html=True)
             
             h_col1, h_col2 = st.columns(2)
             with h_col1:
@@ -79,47 +73,39 @@ def show_quiz():
                     st.info("🐝 **The Beehive Model:** Imagine bees swarming so fast they look like a blurry cloud. Are they inside the hive or around it?")
 
         st.divider()
-        # BLOCK 3: Confidence & Reasoning
         col_cert, col_reas = st.columns(2)
         with col_cert:
             st.markdown("### Step 2: Certainty")
-            t2 = st.select_slider("How sure are you about Part 1?", 
-                                 options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q2")
+            t2 = st.select_slider("How sure are you about Part 1?", options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q2")
         with col_reas:
             st.markdown("### Step 3: Reasoning")
             t3 = st.text_area("Why did you choose that answer?", placeholder="Explain your thinking...", key="q3")
 
-        # BLOCK 4: Final Submission
         if t3.strip():
             st.divider()
             st.subheader("Step 4: Explanation Confidence")
-            t4 = st.select_slider("How confident is your reasoning?", 
-                                 options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q4")
+            t4 = st.select_slider("How confident is your reasoning?", options=["Not Confident", "Somewhat", "Confident", "Very Confident"], key="q4")
 
             if st.button("🚀 Finalize & Submit Research Data"):
                 duration = round(time.time() - st.session_state.start_time, 2)
-                
-                # NLP Analysis of the text reasoning
                 score, keywords = analyze_reasoning_quality(t3)
                 
                 quiz_data = {
                     "User_ID": user['User_ID'], 
                     "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "Tier_1": t1, "Tier_2": t2, "Tier_3": t3, "Tier_4": t4,
-                    "NLP_Score": score, 
-                    "Keywords": keywords, 
-                    "Total_Time": duration
+                    "NLP_Score": score, "Keywords": keywords, "Total_Time": duration
                 }
                 
                 try:
-                    with st.spinner("Syncing to Cloud..."):
+                    with st.spinner("Syncing..."):
                         if save_quiz_responses(quiz_data):
                             save_temporal_traces(st.session_state.get('trace_buffer', []))
                             st.success(f"✅ Synced! Score: {score}/7")
                             st.balloons()
                             st.session_state.trace_buffer = []
                 except Exception as e:
-                    st.error(f"Submission Error: {e}")
+                    st.error(f"Error: {e}")
 
 # --- 5. ROUTING ---
 if not st.session_state.logged_in:
