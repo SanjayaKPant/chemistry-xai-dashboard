@@ -5,20 +5,23 @@ import json
 import pandas as pd
 
 def get_gspread_client():
-    """Authenticates with Google Sheets using the flattened JSON secret."""
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
+    
+    # Get the credentials dictionary from secrets
+    creds_info = dict(st.secrets["gcp_service_account"])
+    
+    # THE REPAIR: Convert literal "\n" text back into actual newlines
+    if "private_key" in creds_info:
+        creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
+    
     try:
-        # Load the raw JSON string from secrets
-        creds_json = st.secrets["gcp_service_account"]["json_creds"]
-        creds_info = json.loads(creds_json)
-        
-        # Authenticate
+        from google.oauth2.service_account import Credentials
         credentials = Credentials.from_service_account_info(creds_info, scopes=scope)
         return gspread.authorize(credentials)
     except Exception as e:
-        st.error(f"Authentication failed: {e}")
+        # This will now show the actual underlying error if it persists
+        st.error(f"PEM Loader Error: {e}")
         return None
-
 def check_login(user_id):
     """Checks if the User ID exists in the 'Participants' tab."""
     client = get_gspread_client()
