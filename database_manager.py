@@ -4,11 +4,25 @@ import pandas as pd
 import base64
 from google.oauth2.service_account import Credentials
 
+import streamlit as st
+import gspread
+import pandas as pd
+import base64
+from google.oauth2.service_account import Credentials
+
 def get_gspread_client():
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
     try:
-        # Decode the Base64 key into a standard string in-memory
-        encoded_key = st.secrets["private_key_base64"]
+        # 1. Pull the string and strip any hidden spaces/newlines from the UI
+        encoded_key = st.secrets["private_key_base64"].strip()
+        
+        # 2. THE FIX: Add padding characters (=) until the length is a multiple of 4
+        # This solves the "1 more than a multiple of 4" error automatically
+        missing_padding = len(encoded_key) % 4
+        if missing_padding:
+            encoded_key += '=' * (4 - missing_padding)
+        
+        # 3. Decode safely
         decoded_key = base64.b64decode(encoded_key).decode("utf-8")
         
         creds_info = {
@@ -27,9 +41,8 @@ def get_gspread_client():
         credentials = Credentials.from_service_account_info(creds_info, scopes=scope)
         return gspread.authorize(credentials)
     except Exception as e:
-        st.error(f"Base64 Auth Failed: {e}")
+        st.error(f"Base64 Repair Failed: {e}")
         return None
-
 def check_login(user_id):
     client = get_gspread_client()
     if not client: return False
