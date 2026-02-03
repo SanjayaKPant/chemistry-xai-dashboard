@@ -3,23 +3,27 @@ import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
 
+import base64
+
 def get_gspread_client():
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
     
-    # 1. Get secrets and convert to a mutable dictionary
+    # Get secrets info
     creds_info = dict(st.secrets["gcp_service_account"])
     
-    # 2. THE FIX: Explicitly replace the text string "\n" with actual newlines
-    # This prevents the InvalidByte error during PEM loading
-    if "private_key" in creds_info:
-        creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
+    # NEW BASE64 DECODING STEP
+    if "private_key_b64" in creds_info:
+        # Decode the safe string back into the original PEM key
+        decoded_key = base64.b64decode(creds_info["private_key_b64"]).decode("utf-8")
+        creds_info["private_key"] = decoded_key
+        # Clean up the dict before sending to Google
+        del creds_info["private_key_b64"]
     
     try:
         credentials = Credentials.from_service_account_info(creds_info, scopes=scope)
         return gspread.authorize(credentials)
     except Exception as e:
-        # This will now show us a much cleaner error if it still fails
-        st.error(f"Authentication Error: {e}")
+        st.error(f"Security Shield Error: {e}")
         return None
 def check_login(user_id):
     try:
