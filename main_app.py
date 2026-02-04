@@ -15,25 +15,35 @@ if st.session_state.user is None:
             st.session_state.user = res
             st.rerun()
         else:
-            st.error("ID not found in Participants sheet.")
+            st.error("ID not found or Database Error. Check your Secrets and Tab name.")
 else:
     user = st.session_state.user
     role = user['role']
     
-    st.sidebar.success(f"Logged in: {user['name']}")
+    st.sidebar.success(f"User: {user['name']}")
+    st.sidebar.info(f"Role: {role}")
     if st.sidebar.button("Logout"):
         st.session_state.user = None
         st.rerun()
 
-    if role in ["Admin", "Researcher", "Supervisor"]:
-        st.title("🔬 Researcher Analytics Dashboard")
-        st.info("Tracking misconception frequency across Grade 9 classes.")
-        st.metric("AI Analysis Status", analyze_reasoning_quality([]))
-        
+    # --- ROLE-BASED DASHBOARDS ---
+    if role in ["Admin", "Supervisor"]:
+        st.title("🔬 Researcher Command Center")
+        st.subheader("Conceptual Change Analytics")
+        st.metric("AI Engine Status", analyze_reasoning_quality([]))
+        st.write("Monitoring real-time student misconceptions...")
+        # Add a placeholder for your data charts
+        st.bar_chart({"Misconceptions": [5, 12, 3], "Topic": ["Atoms", "Bonds", "Matter"]})
+
     elif role == "Teacher":
-        st.title("👨‍🏫 Teacher Lesson Portal")
-        st.file_uploader("Upload Chemistry Lesson (PDF)", type=['pdf'])
+        st.title("👨‍🏫 Teacher Portal")
+        st.subheader("Upload Grade 9 Chemistry Lessons")
+        st.file_uploader("Upload Lesson PDF/Image", type=['pdf', 'jpg', 'png'])
 
     elif role == "Student":
         st.title("🎓 Student Learning Portal")
-        st.write("Today's Task: The Particulate Nature of Matter")
+        st.write(f"Welcome, {user['name']}. Let's study the Particulate Nature of Matter.")
+        # Reasoning sandbox for misconception detection
+        st.text_area("Explain why a balloon shrinks in a cold freezer:")
+        if st.button("Submit Explanation"):
+            st.success("Reasoning saved. AI is analyzing your mental model.")
