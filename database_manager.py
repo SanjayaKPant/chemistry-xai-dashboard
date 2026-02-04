@@ -10,11 +10,11 @@ def get_gspread_client():
         creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
         credentials = Credentials.from_service_account_info(creds_info, scopes=scope)
         
-        # --- THIS WAS THE MISSING LINE ---
+        # --- THE FIX: YOU MUST DEFINE CLIENT BEFORE RETURNING IT ---
         client = gspread.authorize(credentials) 
-        # ---------------------------------
-        
         return client
+        # ---------------------------------------------------------
+        
     except Exception as e:
         st.error(f"Authentication Error: {e}")
         return None
