@@ -6,10 +6,12 @@ from google.oauth2.service_account import Credentials
 def get_gspread_client():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     try:
+        # 1. Fetch secrets from Streamlit Cloud
         creds_info = dict(st.secrets["gcp_service_account"])
         creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
         credentials = Credentials.from_service_account_info(creds_info, scopes=scope)
-        # Fix: Authorize client
+        
+        # 2. Authorize the client (The 'client' variable must be defined here)
         client = gspread.authorize(credentials) 
         return client
     except Exception as e:
