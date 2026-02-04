@@ -1,55 +1,50 @@
 import streamlit as st
-# This MUST match the function names in your database_manager.py
-from database_manager import (
-    check_login, 
-    save_quiz_responses, 
-    save_temporal_traces, 
-    analyze_reasoning_quality
-)
+from database_manager import check_login # and your other functions
 
-# --- PAGE CONFIG ---
-st.set_page_config(page_title="AI for Science Lab", layout="wide")
+if 'user' not in st.session_state:
+    st.session_state.user = None
 
-# --- SESSION STATE INITIALIZATION ---
-# This acts as the "memory" of your app
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-if 'user_id' not in st.session_state:
-    st.session_state.user_id = None
-
-# --- VIEW LOGIC ---
-if not st.session_state.logged_in:
-    # 1. LOGIN SCREEN
-    st.title("🔐 PhD Research Portal: Login")
-    st.write("Please enter your participant ID to access the Chemistry-XAI Dashboard.")
-    
-    user_input = st.text_input("Participant ID (e.g., S001)").strip().upper()
-    
-    if st.button("Access Dashboard"):
-        if check_login(user_input):
-            st.session_state.logged_in = True
-            st.session_state.user_id = user_input
-            st.rerun()  # Forces the app to refresh and show the Dashboard view
+if st.session_state.user is None:
+    # --- LOGIN PAGE ---
+    st.title("🧪 AI for Science: Chemistry Portal")
+    user_id = st.text_input("Enter ID").upper()
+    if st.button("Login"):
+        user_data = check_login(user_id)
+        if user_data:
+            st.session_state.user = user_data
+            st.rerun()
         else:
-            st.error("Access Denied: ID not found in the research database.")
+            st.error("ID not found.")
 
 else:
-    # 2. DASHBOARD VIEW (Shown only after successful login)
-    st.sidebar.success(f"Logged in as: {st.session_state.user_id}")
-    if st.sidebar.button("Log Out"):
-        st.session_state.logged_in = False
-        st.session_state.user_id = None
+    role = st.session_state.user['role']
+    name = st.session_state.user['name']
+
+    # --- SHARED SIDEBAR ---
+    st.sidebar.title(f"Welcome, {name}")
+    st.sidebar.info(f"Role: {role}")
+    if st.sidebar.button("Logout"):
+        st.session_state.user = None
         st.rerun()
 
-    st.title("🧪 Chemistry-XAI Research Dashboard")
-    st.info(f"Welcome, Participant {st.session_state.user_id}. The system is ready.")
-    
-    # This is where your actual experiment content goes
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("Current Task")
-        st.write("Analyze the molecular structures provided and submit your reasoning.")
-    
-    with col2:
-        status = analyze_reasoning_quality([]) # Calling your stub function
-        st.metric("System Status", status)
+    # --- ROLE-BASED DASHBOARDS ---
+    if role == "Admin" or role == "Researcher":
+        st.title("🔬 Researcher Command Center")
+        st.write("Monitoring conceptual change and system metrics.")
+        # Add metrics for total responses and detected misconceptions
+        col1, col2 = st.columns(2)
+        col1.metric("Active Students", "45") 
+        col2.metric("Misconceptions Found", "12")
+
+    elif role == "Teacher":
+        st.title("👨‍🏫 Teacher Upload Portal")
+        st.subheader("Upload Grade 9 Chemistry Lessons")
+        uploaded_file = st.file_uploader("Upload PDF or Image", type=['pdf', 'png', 'jpg'])
+        if uploaded_file:
+            st.success("Lesson uploaded to Google Drive folder.")
+
+    elif role == "Student":
+        st.title("🎓 Student Learning Portal")
+        st.info("Grade 9 Chemistry: Atomic Structure & Bonding")
+        # The student sees the actual learning content here
+        st.video("https://www.youtube.com/watch?v=your_lesson_video")
