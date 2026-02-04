@@ -4,14 +4,11 @@ import pandas as pd
 from google.oauth2.service_account import Credentials
 
 def get_gspread_client():
-    # We include both Sheets and Drive scopes to ensure the 'Search' function works
-    scope = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
+    # Define the scopes for Sheets and Drive
+    scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     try:
+        # Get credentials from Streamlit Secrets
         creds_info = dict(st.secrets["gcp_service_account"])
-        # Fix formatting for the private key
         creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
         credentials = Credentials.from_service_account_info(creds_info, scopes=scope)
         return gspread.authorize(credentials)
@@ -22,35 +19,39 @@ def get_gspread_client():
 def check_login(user_id):
     client = get_gspread_client()
     if not client: return False
-    
     try:
-        # 1. Clean the ID aggressively (removing spaces, newlines, or full URL parts)
+        # Extract the ID from the secret (strips any accidentally pasted URL parts)
         raw_id = st.secrets["general"]["private_gsheets_url"]
         sheet_id = raw_id.split("/d/")[-1].split("/")[0].strip()
-        
-        # 2. Try to open the sheet
+
+        # Step 1: Open the spreadsheet
         try:
             sh = client.open_by_key(sheet_id)
         except Exception:
-            # BACKUP: Try to find the sheet by its exact name if ID fails
-            try:
-                sh = client.open("Chemistry_Research_Data")
-            except Exception as e:
-                st.error(f"Google cannot find the sheet. Please ensure the email '{client.auth.service_account_email}' is an Editor.")
-                return False
+            # Fallback: try finding by name if the ID lookup fails
+            sh = client.open("Chemistry_Research_Data")
             
-        # 3. Access the tab
+        # Step 2: Open the 'Participants' tab
         worksheet = sh.worksheet("Participants") 
         data = pd.DataFrame(worksheet.get_all_records())
         
-        # 4. Final ID check (Case-insensitive)
-        user_list = data['User_ID'].astype(str).str.strip().tolist()
-        return str(user_id).strip() in user_list
-
+        # Step 3: Check if User_ID exists (Case-insensitive)
+        valid_ids = data['User_ID'].astype(str).str.strip().str.upper().values
+        return str(user_id).strip().upper() in valid_ids
     except Exception as e:
-        st.error(f"Final Query Error: {e}")
+        st.error(f"Database Connection Error: {e}")
         return False
 
-# Placeholder stubs for your research tracking
-def save_quiz_responses(u, r): pass
-def save_temporal_traces(u, t): pass
+# --- THESE FUNCTIONS ARE REQUIRED BY MAIN_APP.PY TO PREVENT THE IMPORT ERROR ---
+
+def save_quiz_responses(user_id, responses):
+    """Saves quiz data - implementation coming in next step."""
+    pass
+
+def save_temporal_traces(user_id, traces):
+    """Saves user behavior data - implementation coming in next step."""
+    pass
+
+def analyze_reasoning_quality(responses):
+    """AI analysis placeholder - implementation coming in next step."""
+    return "AI Engine Online"
