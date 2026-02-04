@@ -1,50 +1,45 @@
 import streamlit as st
-from database_manager import check_login # and your other functions
+from database_manager import check_login, analyze_reasoning_quality
+
+st.set_page_config(page_title="AI for Science", layout="wide")
 
 if 'user' not in st.session_state:
     st.session_state.user = None
 
 if st.session_state.user is None:
-    # --- LOGIN PAGE ---
     st.title("🧪 AI for Science: Chemistry Portal")
-    user_id = st.text_input("Enter ID").upper()
+    uid = st.text_input("Enter ID (e.g., ADMIN01 or S001)").strip().upper()
     if st.button("Login"):
-        user_data = check_login(user_id)
-        if user_data:
-            st.session_state.user = user_data
+        res = check_login(uid)
+        if res:
+            st.session_state.user = res
             st.rerun()
         else:
-            st.error("ID not found.")
-
+            st.error("Invalid ID.")
 else:
-    role = st.session_state.user['role']
-    name = st.session_state.user['name']
-
-    # --- SHARED SIDEBAR ---
-    st.sidebar.title(f"Welcome, {name}")
+    user = st.session_state.user
+    role = user['role']
+    
+    st.sidebar.success(f"Logged in as: {user['name']}")
     st.sidebar.info(f"Role: {role}")
     if st.sidebar.button("Logout"):
         st.session_state.user = None
         st.rerun()
 
-    # --- ROLE-BASED DASHBOARDS ---
-    if role == "Admin" or role == "Researcher":
+    # --- ROLE LOGIC ---
+    if role in ["Admin", "Supervisor"]:
         st.title("🔬 Researcher Command Center")
-        st.write("Monitoring conceptual change and system metrics.")
-        # Add metrics for total responses and detected misconceptions
-        col1, col2 = st.columns(2)
-        col1.metric("Active Students", "45") 
-        col2.metric("Misconceptions Found", "12")
+        st.write("Monitor student misconceptions and learning progress in real-time.")
+        # Analytics would go here (Data from 'Responses' and 'Temporal_Traces' sheets)
+        st.metric("System Status", analyze_reasoning_quality([]))
 
     elif role == "Teacher":
-        st.title("👨‍🏫 Teacher Upload Portal")
-        st.subheader("Upload Grade 9 Chemistry Lessons")
-        uploaded_file = st.file_uploader("Upload PDF or Image", type=['pdf', 'png', 'jpg'])
-        if uploaded_file:
-            st.success("Lesson uploaded to Google Drive folder.")
+        st.title("👨‍🏫 Teacher Portal")
+        st.subheader("Manage Grade 9 Lessons")
+        st.file_uploader("Upload AI-integrated lesson materials", type=['pdf', 'jpg', 'png'])
 
     elif role == "Student":
         st.title("🎓 Student Learning Portal")
-        st.info("Grade 9 Chemistry: Atomic Structure & Bonding")
-        # The student sees the actual learning content here
-        st.video("https://www.youtube.com/watch?v=your_lesson_video")
+        st.write(f"Welcome to your Grade 9 Chemistry Dashboard, {user['name']}.")
+        # Misconception detection tasks would be triggered here
+        st.info("Today's Task: Atomic Structure Analysis")
