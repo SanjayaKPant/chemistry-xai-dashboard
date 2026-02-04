@@ -1,4 +1,5 @@
 import streamlit as st
+# Only import what we defined in Step 1
 from database_manager import check_login, analyze_reasoning_quality
 
 st.set_page_config(page_title="Chemistry PhD Portal", layout="wide")
@@ -15,26 +16,20 @@ if st.session_state.user is None:
             st.session_state.user = res
             st.rerun()
         else:
-            st.error("Login failed. Check your ID and Google Sheet tab name.")
+            st.error("Login failed. Check ID and Sheet Permissions.")
 else:
     user = st.session_state.user
     role = user['role']
     
-    st.sidebar.success(f"Logged in: {user['name']}")
+    st.sidebar.success(f"User: {user['name']}")
     if st.sidebar.button("Logout"):
         st.session_state.user = None
         st.rerun()
 
-    # ROLE-BASED DASHBOARD LOGIC
+    # Dashboard Logic based on your sheet roles
     if role in ["Admin", "Supervisor"]:
-        st.title("🔬 Researcher Command Center")
-        st.info("Tracking misconception frequency across Grade 9 classes.")
-        st.metric("AI Analysis Status", analyze_reasoning_quality([]))
-        
-    elif role == "Teacher":
-        st.title("👨‍🏫 Teacher Portal")
-        st.write("Manage your AI-integrated chemistry lessons here.")
-
+        st.title("🔬 Researcher Dashboard")
+        st.metric("AI Engine", analyze_reasoning_quality([]))
     elif role == "Student":
-        st.title("🎓 Student Learning Portal")
-        st.write("Explain your reasoning to help the AI detect mental models.")
+        st.title("🎓 Student Portal")
+        st.write("Welcome to the Chemistry Reasoning Task.")
