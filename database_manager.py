@@ -71,4 +71,37 @@ def upload_and_log_material(teacher_id, group, title, mode, file_obj, desc, hint
         media = MediaIoBaseUpload(io.BytesIO(file_obj.getvalue()), mimetype='application/pdf')
         
         drive_file = drive_service.files().create(
-            body=file
+            body=file_metadata, 
+            media_body=media, 
+            fields='id, webViewLink'
+        ).execute()
+        
+        # Set to 'Anyone with link can view'
+        drive_service.permissions().create(
+            fileId=drive_file.get('id'), 
+            body={'type': 'anyone', 'role': 'viewer'}
+        ).execute()
+        
+        file_link = drive_file.get('webViewLink')
+
+        # 2. Log to GSheets 'Instructional_Materials'
+        sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60"
+        sh = gs_client.open_by_key(sheet_id)
+        # Ensure you created this tab!
+        worksheet = sh.worksheet("Instructional_Materials") 
+        
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        worksheet.append_row([timestamp, teacher_id, group, title, mode, file_link, desc, hint])
+        return True
+    except Exception as e:
+        st.error(f"Systematic Upload Failed: {e}")
+        return False
+
+def log_temporal_trace(user_id, action):
+    client = get_gspread_client()
+    if client:
+        try:
+            sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+            worksheet = sh.worksheet("Temporal_Traces") #
+            worksheet.append_row([user_id, action, datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
+        except: pass
