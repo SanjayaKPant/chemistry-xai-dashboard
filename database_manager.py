@@ -2,16 +2,14 @@ import streamlit as st
 import gspread
 import pandas as pd
 from google.oauth2.service_account import Credentials
+from datetime import datetime
 
 def get_gspread_client():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     try:
-        # 1. Fetch secrets from Streamlit Cloud
         creds_info = dict(st.secrets["gcp_service_account"])
         creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
         credentials = Credentials.from_service_account_info(creds_info, scopes=scope)
-        
-        # 2. Authorize the client (The 'client' variable must be defined here)
         client = gspread.authorize(credentials) 
         return client
     except Exception as e:
@@ -22,32 +20,42 @@ def check_login(user_id):
     client = get_gspread_client()
     if not client: return None
     try:
-        # This matches the Sheet ID in your screenshot
         sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60"
         sh = client.open_by_key(sheet_id)
-        
-        # 3. Access the 'Participants' tab
         worksheet = sh.worksheet("Participants")
         data = pd.DataFrame(worksheet.get_all_records())
         
-        # 4. Standardize columns for matching
-        data['User_ID'] = data['User_ID'].astype(str).str.strip().str.upper()
+        # Standardize for matching
         search_id = str(user_id).strip().upper()
+        data['User_ID'] = data['User_ID'].astype(str).str.strip().upper()
         
         user_row = data[data['User_ID'] == search_id]
+        
         if not user_row.empty:
-            # Returns data to main_app.py
             return {
                 "id": user_row.iloc[0]['User_ID'],
-                "name": user_row.iloc[0]['Name'],
-                "role": user_row.iloc[0]['Role'],
-                "group": user_row.iloc[0]['Group']
+                "password": str(user_row.iloc[0]['Password']), # Column B
+                "name": user_row.iloc[0]['Name'],             # Column C
+                "role": user_row.iloc[0]['Role'],             # Column D
+                "group": user_row.iloc[0]['Group']            # Column E
             }
         return None
     except Exception as e:
-        st.error(f"Database Access Error: {e}")
+        st.error(f"Database Error: {e}")
         return None
 
-# CRITICAL FIX: main_app.py is looking for this!
+def log_temporal_trace(user_id, action):
+    """Automatically logs user activity to the Temporal_Traces tab."""
+    client = get_gspread_client()
+    if client:
+        try:
+            sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60"
+            sh = client.open_by_key(sheet_id)
+            trace_sheet = sh.worksheet("Temporal_Traces")
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            trace_sheet.append_row([user_id, action, now])
+        except:
+            pass # Silent fail to not interrupt user experience
+
 def analyze_reasoning_quality(responses):
     return "AI Engine Online"
