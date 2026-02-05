@@ -7,7 +7,6 @@ from googleapiclient.http import MediaIoBaseUpload
 from datetime import datetime
 import io
 
-# --- GOOGLE CLIENTS & AUTH ---
 def get_creds():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     try:
@@ -26,14 +25,13 @@ def get_drive_service():
     creds = get_creds()
     return build('drive', 'v3', credentials=creds) if creds else None
 
-# --- CORE LOGIN LOGIC ---
 def check_login(user_id):
     client = get_gspread_client()
     if not client: return None
     try:
         sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60" #
         sh = client.open_by_key(sheet_id)
-        worksheet = sh.worksheet("Participants") #
+        worksheet = sh.worksheet("Participants") 
         data = pd.DataFrame(worksheet.get_all_records())
         data['User_ID'] = data['User_ID'].astype(str).str.strip().str.upper()
         search_id = str(user_id).strip().upper()
@@ -51,37 +49,41 @@ def check_login(user_id):
         st.error(f"Login Database Error: {e}")
         return None
 
-# --- SYSTEMATIC FILE UPLOAD & LOGGING ---
 def upload_and_log_material(teacher_id, group, title, mode, file_obj, desc, hint):
     drive_service = get_drive_service()
     gs_client = get_gspread_client()
     
-    # YOUR VALID FOLDER ID
+    # YOUR PERSONAL FOLDER ID
     TARGET_FOLDER_ID = "1sQkHiMCd_8TBeIqBLTd-uozZ5WIQ-k2a" 
 
     if not drive_service or not gs_client: return False
     
     try:
-        st.info("🔄 Uploading to Research Folder...")
+        st.info("🔄 Re-routing upload to Research Folder...")
+        
         file_metadata = {
             'name': f"[{group}] {title}.pdf",
             'parents': [TARGET_FOLDER_ID] 
         }
+        
         media = MediaIoBaseUpload(io.BytesIO(file_obj.getvalue()), mimetype='application/pdf')
         
-        # 1. Upload to Drive
+        # We use .create() with the 'parents' field to bypass the service account quota
         drive_file = drive_service.files().create(
-            body=file_metadata, media_body=media, fields='id, webViewLink'
+            body=file_metadata, 
+            media_body=media, 
+            fields='id, webViewLink'
         ).execute()
         
-        # 2. Set Public Permissions
+        # Grant permissions
         drive_service.permissions().create(
-            fileId=drive_file.get('id'), body={'type': 'anyone', 'role': 'viewer'}
+            fileId=drive_file.get('id'), 
+            body={'type': 'anyone', 'role': 'viewer'}
         ).execute()
         
         file_link = drive_file.get('webViewLink')
 
-        # 3. Log metadata to GSheets tab 'Instructional_Materials'
+        # Log to GSheets Instructional_Materials tab
         sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60"
         sh = gs_client.open_by_key(sheet_id)
         worksheet = sh.worksheet("Instructional_Materials") 
@@ -90,6 +92,7 @@ def upload_and_log_material(teacher_id, group, title, mode, file_obj, desc, hint
         
         return True
     except Exception as e:
+        # This will now display the exact error if it still fails
         st.error(f"❌ Systematic Error: {e}")
         return False
 
@@ -99,6 +102,6 @@ def log_temporal_trace(user_id, action):
         try:
             sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60"
             sh = client.open_by_key(sheet_id)
-            worksheet = sh.worksheet("Temporal_Traces") #
+            worksheet = sh.worksheet("Temporal_Traces") 
             worksheet.append_row([user_id, action, datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
         except: pass
