@@ -1,5 +1,12 @@
 import streamlit as st
-from database_manager import check_login, log_temporal_trace, get_materials_by_group
+import pandas as pd
+from database_manager import check_login, log_temporal_trace, get_materials_by_group # 👈 Added the new function
+
+# --- INITIALIZE SESSION STATE ---
+# This must happen BEFORE any logic runs to prevent 'AttributeError'
+if 'gate' not in st.session_state: st.session_state.gate = None
+if 'user' not in st.session_state: st.session_state.user = None
+if 'target_group' not in st.session_state: st.session_state.target_group = "Exp_A" # 👈 Fixed the target_group error
 
 # --- SAFE IMPORTS ---
 try:
@@ -10,9 +17,6 @@ except Exception as e:
     st.error(f"Error importing modules: {e}")
 
 st.set_page_config(page_title="Chemistry PhD Portal", layout="wide")
-
-if 'target_group' not in st.session_state: 
-    st.session_state.target_group = "Exp_A"
     
 # --- VIEW 1: GATES ---
 if st.session_state.user is None and st.session_state.gate is None:
