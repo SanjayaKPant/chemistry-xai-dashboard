@@ -122,16 +122,25 @@ def log_temporal_trace(user_id, action):
         except: pass
 
 def get_materials_by_group(group_name):
-    """Fetches all materials logged for a specific group (Exp_A or Control)."""
+    """Fetches materials and handles missing column errors gracefully."""
     client = get_gspread_client()
     if not client: return []
     try:
         sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60"
         sh = client.open_by_key(sheet_id)
         worksheet = sh.worksheet("Instructional_Materials")
-        data = pd.DataFrame(worksheet.get_all_records())
+        records = worksheet.get_all_records()
         
-        # Filter for the specific student group
+        if not records:
+            return []
+            
+        data = pd.DataFrame(records)
+        
+        # Defensive check: ensure 'Group' exists in the sheet
+        if 'Group' not in data.columns:
+            st.error(f"Spreadsheet Error: Column 'Group' not found. Found: {list(data.columns)}")
+            return []
+            
         filtered_data = data[data['Group'] == group_name]
         return filtered_data.to_dict('records')
     except Exception as e:
