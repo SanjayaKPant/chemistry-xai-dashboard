@@ -73,29 +73,31 @@ def upload_and_log_material(teacher_id, group, title, mode, file_obj, desc, hint
             body=file_metadata, 
             media_body=media, 
             fields='id, webViewLink'
-        ).execute()
-        
-        # Grant permissions
+        ).execute(supportsAllDrives=True) # 👈 Add this inside execute()
+
+        # 2. Set Public Permissions so students can see the PDF
         drive_service.permissions().create(
             fileId=drive_file.get('id'), 
-            body={'type': 'anyone', 'role': 'viewer'}
+            body={'type': 'anyone', 'role': 'viewer'},
+            supportsAllDrives=True # 👈 Also add it here
         ).execute()
         
         file_link = drive_file.get('webViewLink')
 
-        # Log to GSheets Instructional_Materials tab
+        # 3. Log metadata to GSheets tab 'Instructional_Materials'
         sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60"
         sh = gs_client.open_by_key(sheet_id)
         worksheet = sh.worksheet("Instructional_Materials") 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # This records the path for Plan A and Plan B analysis
         worksheet.append_row([timestamp, teacher_id, group, title, mode, file_link, desc, hint])
         
         return True
     except Exception as e:
-        # This will now display the exact error if it still fails
         st.error(f"❌ Systematic Error: {e}")
         return False
-
+        
 def log_temporal_trace(user_id, action):
     client = get_gspread_client()
     if client:
