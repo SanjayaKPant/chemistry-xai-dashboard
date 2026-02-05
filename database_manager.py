@@ -9,11 +9,7 @@ import io
 
 # --- GOOGLE CLIENTS & AUTH ---
 def get_creds():
-    """Fetches credentials from Streamlit Secrets for Sheets and Drive."""
-    scope = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
+    scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     try:
         creds_info = dict(st.secrets["gcp_service_account"])
         creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
@@ -23,43 +19,25 @@ def get_creds():
         return None
 
 def get_gspread_client():
-    """Returns an authorized gspread client."""
     creds = get_creds()
-    if creds:
-        try:
-            return gspread.authorize(creds)
-        except Exception as e:
-            st.error(f"GSheets Auth Error: {e}")
-    return None
+    return gspread.authorize(creds) if creds else None
 
 def get_drive_service():
-    """Returns an authorized Google Drive service."""
     creds = get_creds()
-    if creds:
-        try:
-            return build('drive', 'v3', credentials=creds)
-        except Exception as e:
-            st.error(f"GDrive Auth Error: {e}")
-    return None
+    return build('drive', 'v3', credentials=creds) if creds else None
 
 # --- CORE LOGIN LOGIC ---
 def check_login(user_id):
-    """Standardizes ID and verifies credentials from the Participants tab."""
     client = get_gspread_client()
     if not client: return None
     try:
-        # Your specific Sheet ID
-        sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60"
+        sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60" #
         sh = client.open_by_key(sheet_id)
         worksheet = sh.worksheet("Participants") #
         data = pd.DataFrame(worksheet.get_all_records())
-        
-        # FIXED: Using .str accessor to prevent 'Series' attribute errors
         data['User_ID'] = data['User_ID'].astype(str).str.strip().str.upper()
         search_id = str(user_id).strip().upper()
-        
         user_row = data[data['User_ID'] == search_id]
-        
         if not user_row.empty:
             return {
                 "id": user_row.iloc[0]['User_ID'],
@@ -78,32 +56,44 @@ def upload_and_log_material(teacher_id, group, title, mode, file_obj, desc, hint
     drive_service = get_drive_service()
     gs_client = get_gspread_client()
     
-    # PASTE YOUR FOLDER ID HERE
+    # YOUR VALID FOLDER ID
     TARGET_FOLDER_ID = "1sQkHiMCd_8TBeIqBLTd-uozZ5WIQ-k2a" 
 
-    if not drive_service or not gs_client:
-        return False
+    if not drive_service or not gs_client: return False
     
     try:
         st.info("🔄 Uploading to Research Folder...")
-        # We add 'parents' to tell Google exactly where to put the file
         file_metadata = {
             'name': f"[{group}] {title}.pdf",
             'parents': [TARGET_FOLDER_ID] 
         }
-        
         media = MediaIoBaseUpload(io.BytesIO(file_obj.getvalue()), mimetype='application/pdf')
         
+        # 1. Upload to Drive
         drive_file = drive_service.files().create(
-            body=file_metadata, 
-            media_body=media, 
-            fields='id, webViewLink'
+            body=file_metadata, media_body=media, fields='id, webViewLink'
         ).execute()
         
-        # ... (keep the rest of the permissions and logging code the same)
-# --- RESEARCH TRACE LOGGING ---
+        # 2. Set Public Permissions
+        drive_service.permissions().create(
+            fileId=drive_file.get('id'), body={'type': 'anyone', 'role': 'viewer'}
+        ).execute()
+        
+        file_link = drive_file.get('webViewLink')
+
+        # 3. Log metadata to GSheets tab 'Instructional_Materials'
+        sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60"
+        sh = gs_client.open_by_key(sheet_id)
+        worksheet = sh.worksheet("Instructional_Materials") 
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        worksheet.append_row([timestamp, teacher_id, group, title, mode, file_link, desc, hint])
+        
+        return True
+    except Exception as e:
+        st.error(f"❌ Systematic Error: {e}")
+        return False
+
 def log_temporal_trace(user_id, action):
-    """Records every user action for Plan A and Plan B analysis."""
     client = get_gspread_client()
     if client:
         try:
@@ -111,5 +101,4 @@ def log_temporal_trace(user_id, action):
             sh = client.open_by_key(sheet_id)
             worksheet = sh.worksheet("Temporal_Traces") #
             worksheet.append_row([user_id, action, datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
-        except:
-            pass # Fails silently to not disrupt user experience
+        except: pass
