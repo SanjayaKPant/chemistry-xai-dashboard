@@ -75,17 +75,23 @@ def check_login(user_id):
 
 # --- SYSTEMATIC FILE UPLOAD & LOGGING ---
 def upload_and_log_material(teacher_id, group, title, mode, file_obj, desc, hint):
-    """Uploads PDF to Drive and logs metadata to Instructional_Materials tab."""
     drive_service = get_drive_service()
     gs_client = get_gspread_client()
     
+    # PASTE YOUR FOLDER ID HERE
+    TARGET_FOLDER_ID = "YOUR_COPIED_FOLDER_ID_HERE" 
+
     if not drive_service or not gs_client:
         return False
     
     try:
-        # 1. Upload File to Google Drive
-        st.info("🔄 Initiating Google Drive Upload...")
-        file_metadata = {'name': f"[{group}] {title}.pdf"}
+        st.info("🔄 Uploading to Research Folder...")
+        # We add 'parents' to tell Google exactly where to put the file
+        file_metadata = {
+            'name': f"[{group}] {title}.pdf",
+            'parents': [TARGET_FOLDER_ID] 
+        }
+        
         media = MediaIoBaseUpload(io.BytesIO(file_obj.getvalue()), mimetype='application/pdf')
         
         drive_file = drive_service.files().create(
@@ -94,31 +100,7 @@ def upload_and_log_material(teacher_id, group, title, mode, file_obj, desc, hint
             fields='id, webViewLink'
         ).execute()
         
-        # 2. Set public viewing permission for students
-        drive_service.permissions().create(
-            fileId=drive_file.get('id'), 
-            body={'type': 'anyone', 'role': 'viewer'}
-        ).execute()
-        
-        file_link = drive_file.get('webViewLink')
-        st.success(f"📂 File saved to Drive: {drive_file.get('id')}")
-
-        # 3. Log metadata to GSheets
-        st.info("📝 Logging metadata to Google Sheets...")
-        sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE (your full ID here)" # Ensure full ID is used
-        sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60"
-        sh = gs_client.open_by_key(sheet_id)
-        worksheet = sh.worksheet("Instructional_Materials") 
-        
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # Appends data to your new tab
-        worksheet.append_row([timestamp, teacher_id, group, title, mode, file_link, desc, hint])
-        
-        return True
-    except Exception as e:
-        st.error(f"❌ Systematic Error: {type(e).__name__} - {e}")
-        return False
-
+        # ... (keep the rest of the permissions and logging code the same)
 # --- RESEARCH TRACE LOGGING ---
 def log_temporal_trace(user_id, action):
     """Records every user action for Plan A and Plan B analysis."""
