@@ -49,6 +49,14 @@ def show_teacher_portal(user):
             else:
                 st.error("Please provide both a Lesson Title and a PDF file.")
 
-    st.divider()
-    st.header("📊 Recent Activity")
-    st.info(f"Systematic folder organization is active. All files are being logged for the {selected_group} cohort.")
+    # Inside your teacher view function:
+st.divider()
+st.subheader("📊 Previously Published Materials")
+all_materials = get_materials_by_group(st.session_state.target_group)
+
+if all_materials:
+    df_display = pd.DataFrame(all_materials)
+    # Only show relevant columns to the teacher
+    st.table(df_display[['Timestamp', 'Title', 'Mode', 'File_Link']])
+else:
+    st.write("No materials found for this group.")
