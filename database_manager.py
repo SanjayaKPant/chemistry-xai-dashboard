@@ -2,61 +2,73 @@ import streamlit as st
 import gspread
 import pandas as pd
 from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 from datetime import datetime
+import io
+
+# --- GOOGLE CLIENTS ---
+def get_creds():
+    scope = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    creds_info = dict(st.secrets["gcp_service_account"])
+    creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
+    return Credentials.from_service_account_info(creds_info, scopes=scope)
 
 def get_gspread_client():
-    scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     try:
-        creds_info = dict(st.secrets["gcp_service_account"])
-        creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
-        credentials = Credentials.from_service_account_info(creds_info, scopes=scope)
-        client = gspread.authorize(credentials) 
-        return client
+        return gspread.authorize(get_creds())
     except Exception as e:
-        st.error(f"Auth Error: {e}")
+        st.error(f"GSheets Auth Error: {e}")
         return None
 
+def get_drive_service():
+    try:
+        return build('drive', 'v3', credentials=get_creds())
+    except Exception as e:
+        st.error(f"GDrive Auth Error: {e}")
+        return None
+
+# --- DATABASE LOGIC ---
 def check_login(user_id):
     client = get_gspread_client()
     if not client: return None
     try:
-        sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60"
+        sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60" #
         sh = client.open_by_key(sheet_id)
-        worksheet = sh.worksheet("Participants")
+        worksheet = sh.worksheet("Participants") #
         data = pd.DataFrame(worksheet.get_all_records())
         
-        # FIXED LINE BELOW: Added .str before .upper()
-        data['User_ID'] = data['User_ID'].astype(str).str.strip().str.upper()
-        
+        data['User_ID'] = data['User_ID'].astype(str).str.strip().upper()
         search_id = str(user_id).strip().upper()
         user_row = data[data['User_ID'] == search_id]
         
         if not user_row.empty:
-            # Note: We use .iloc[0] because the row is now found correctly
             return {
                 "id": user_row.iloc[0]['User_ID'],
-                "password": str(user_row.iloc[0]['Password']), 
-                "name": user_row.iloc[0]['Name'],             
-                "role": user_row.iloc[0]['Role'],             
-                "group": user_row.iloc[0]['Group']            
+                "password": str(user_row.iloc[0]['Password']), #
+                "name": user_row.iloc[0]['Name'],
+                "role": user_row.iloc[0]['Role'],
+                "group": user_row.iloc[0]['Group']
             }
         return None
     except Exception as e:
-        st.error(f"Database Error: {e}")
+        st.error(f"Login Error: {e}")
         return None
 
-def log_temporal_trace(user_id, action):
-    """Automatically logs user activity to the Temporal_Traces tab."""
-    client = get_gspread_client()
-    if client:
-        try:
-            sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60"
-            sh = client.open_by_key(sheet_id)
-            trace_sheet = sh.worksheet("Temporal_Traces")
-            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            trace_sheet.append_row([user_id, action, now])
-        except:
-            pass # Silent fail to not interrupt user experience
-
-def analyze_reasoning_quality(responses):
-    return "AI Engine Online"
+# --- SYSTEMATIC FILE ORGANIZATION ---
+def upload_and_log_material(teacher_id, group, title, mode, file_obj, desc, hint):
+    drive_service = get_drive_service()
+    gs_client = get_gspread_client()
+    
+    if not drive_service or not gs_client: return False
+    
+    try:
+        # 1. Upload to Drive
+        file_metadata = {'name': f"[{group}] {title}.pdf"}
+        media = MediaIoBaseUpload(io.BytesIO(file_obj.getvalue()), mimetype='application/pdf')
+        
+        drive_file = drive_service.files().create(
+            body=file
