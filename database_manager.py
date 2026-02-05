@@ -36,25 +36,31 @@ def check_login(user_id):
     client = get_gspread_client()
     if not client: return None
     try:
-        sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60" #
+        sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60"
         sh = client.open_by_key(sheet_id)
-        worksheet = sh.worksheet("Participants") #
+        worksheet = sh.worksheet("Participants")
         data = pd.DataFrame(worksheet.get_all_records())
         
-        data['User_ID'] = data['User_ID'].astype(str).str.strip().upper()
+        # THE FIX: We must use .str before .upper() to handle the whole column
+        data['User_ID'] = data['User_ID'].astype(str).str.strip().str.upper()
+        
+        # Clean the input from the login screen
         search_id = str(user_id).strip().upper()
+        
+        # Look for the user
         user_row = data[data['User_ID'] == search_id]
         
         if not user_row.empty:
             return {
                 "id": user_row.iloc[0]['User_ID'],
-                "password": str(user_row.iloc[0]['Password']), #
+                "password": str(user_row.iloc[0]['Password']),
                 "name": user_row.iloc[0]['Name'],
                 "role": user_row.iloc[0]['Role'],
                 "group": user_row.iloc[0]['Group']
             }
         return None
     except Exception as e:
+        # This is where the red error box in your screenshot is coming from
         st.error(f"Login Error: {e}")
         return None
 
