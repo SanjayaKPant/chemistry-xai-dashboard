@@ -68,18 +68,19 @@ def upload_and_log_material(teacher_id, group, title, mode, file_obj, desc, hint
         
         media = MediaIoBaseUpload(io.BytesIO(file_obj.getvalue()), mimetype='application/pdf')
         
-        # We use .create() with the 'parents' field to bypass the service account quota
+        # 1. Upload to Drive (Moving the parameter inside create)
         drive_file = drive_service.files().create(
             body=file_metadata, 
             media_body=media, 
-            fields='id, webViewLink'
-        ).execute(supportsAllDrives=True) # 👈 Add this inside execute()
-
-        # 2. Set Public Permissions so students can see the PDF
+            fields='id, webViewLink',
+            supportsAllDrives=True  # 👈 PLACE IT HERE
+        ).execute()
+        
+        # 2. Set Public Permissions (Moving the parameter inside create)
         drive_service.permissions().create(
             fileId=drive_file.get('id'), 
             body={'type': 'anyone', 'role': 'viewer'},
-            supportsAllDrives=True # 👈 Also add it here
+            supportsAllDrives=True  # 👈 PLACE IT HERE
         ).execute()
         
         file_link = drive_file.get('webViewLink')
