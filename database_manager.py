@@ -7,8 +7,13 @@ from googleapiclient.http import MediaIoBaseUpload
 from datetime import datetime
 import io
 
+# --- GOOGLE CLIENTS & AUTH ---
 def get_creds():
-    scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    """Fetches credentials for Sheets and Drive with Shared Drive scope."""
+    scope = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
     try:
         creds_info = dict(st.secrets["gcp_service_account"])
         creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
@@ -25,17 +30,23 @@ def get_drive_service():
     creds = get_creds()
     return build('drive', 'v3', credentials=creds) if creds else None
 
+# --- CORE LOGIN LOGIC ---
 def check_login(user_id):
+    """Verifies credentials and fixes the 'Series' attribute error."""
     client = get_gspread_client()
     if not client: return None
     try:
-        sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60" #
+        sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60"
         sh = client.open_by_key(sheet_id)
-        worksheet = sh.worksheet("Participants") 
+        worksheet = sh.worksheet("Participants")
         data = pd.DataFrame(worksheet.get_all_records())
+        
+        # Standardizing ID format to prevent login failures
         data['User_ID'] = data['User_ID'].astype(str).str.strip().str.upper()
         search_id = str(user_id).strip().upper()
+        
         user_row = data[data['User_ID'] == search_id]
+        
         if not user_row.empty:
             return {
                 "id": user_row.iloc[0]['User_ID'],
@@ -49,59 +60,58 @@ def check_login(user_id):
         st.error(f"Login Database Error: {e}")
         return None
 
+# --- SYSTEMATIC FILE UPLOAD & LOGGING ---
 def upload_and_log_material(teacher_id, group, title, mode, file_obj, desc, hint):
+    """Uploads to Shared Drive to bypass the 403 Quota Error."""
     drive_service = get_drive_service()
     gs_client = get_gspread_client()
     
-    # YOUR PERSONAL FOLDER ID
-    TARGET_FOLDER_ID = "1sQkHiMCd_8TBeIqBLTd-uozZ5WIQ-k2a" 
+    # YOUR NEW SHARED DRIVE ID
+    TARGET_DRIVE_ID = "0AJAe9AoSTt6-Uk9PVA" 
 
     if not drive_service or not gs_client: return False
     
     try:
-        st.info("🔄 Re-routing upload to Research Folder...")
+        st.info("🔄 Uploading to Shared Research Drive...")
         
         file_metadata = {
             'name': f"[{group}] {title}.pdf",
-            'parents': [TARGET_FOLDER_ID] 
+            'parents': [TARGET_DRIVE_ID] 
         }
         
         media = MediaIoBaseUpload(io.BytesIO(file_obj.getvalue()), mimetype='application/pdf')
         
-        # 1. Upload to Drive with Ownership Override
+        # supportsAllDrives=True is the key to using the Shared Drive's quota
         drive_file = drive_service.files().create(
             body=file_metadata, 
             media_body=media, 
             fields='id, webViewLink',
-            supportsAllDrives=True,
-            # This is the "Magic" line that bypasses the robot's quota
-            keepRevisionForever=False 
+            supportsAllDrives=True
         ).execute()
         
-        # 2. Set Public Permissions (Moving the parameter inside create)
+        # Grant permissions so participants can view the material
         drive_service.permissions().create(
             fileId=drive_file.get('id'), 
             body={'type': 'anyone', 'role': 'viewer'},
-            supportsAllDrives=True  # 👈 PLACE IT HERE
+            supportsAllDrives=True
         ).execute()
         
         file_link = drive_file.get('webViewLink')
 
-        # 3. Log metadata to GSheets tab 'Instructional_Materials'
+        # Log metadata to the Spreadsheet for Plan A/B analysis
         sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60"
         sh = gs_client.open_by_key(sheet_id)
         worksheet = sh.worksheet("Instructional_Materials") 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        # This records the path for Plan A and Plan B analysis
         worksheet.append_row([timestamp, teacher_id, group, title, mode, file_link, desc, hint])
         
         return True
     except Exception as e:
         st.error(f"❌ Systematic Error: {e}")
         return False
-        
+
 def log_temporal_trace(user_id, action):
+    """Records user actions for research data integrity."""
     client = get_gspread_client()
     if client:
         try:
