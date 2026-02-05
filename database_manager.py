@@ -79,7 +79,7 @@ def upload_and_log_material(teacher_id, group, title, mode, file_obj, desc, hint
     gs_client = get_gspread_client()
     
     # PASTE YOUR FOLDER ID HERE
-    TARGET_FOLDER_ID = "YOUR_COPIED_FOLDER_ID_HERE" 
+    TARGET_FOLDER_ID = "1sQkHiMCd_8TBeIqBLTd-uozZ5WIQ-k2a" 
 
     if not drive_service or not gs_client:
         return False
