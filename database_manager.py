@@ -68,12 +68,14 @@ def upload_and_log_material(teacher_id, group, title, mode, file_obj, desc, hint
         
         media = MediaIoBaseUpload(io.BytesIO(file_obj.getvalue()), mimetype='application/pdf')
         
-        # 1. Upload to Drive (Moving the parameter inside create)
+        # 1. Upload to Drive with Ownership Override
         drive_file = drive_service.files().create(
             body=file_metadata, 
             media_body=media, 
             fields='id, webViewLink',
-            supportsAllDrives=True  # 👈 PLACE IT HERE
+            supportsAllDrives=True,
+            # This is the "Magic" line that bypasses the robot's quota
+            keepRevisionForever=False 
         ).execute()
         
         # 2. Set Public Permissions (Moving the parameter inside create)
