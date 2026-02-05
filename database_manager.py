@@ -120,3 +120,21 @@ def log_temporal_trace(user_id, action):
             worksheet = sh.worksheet("Temporal_Traces") 
             worksheet.append_row([user_id, action, datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
         except: pass
+
+def get_materials_by_group(group_name):
+    """Fetches all materials logged for a specific group (Exp_A or Control)."""
+    client = get_gspread_client()
+    if not client: return []
+    try:
+        sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60"
+        sh = client.open_by_key(sheet_id)
+        worksheet = sh.worksheet("Instructional_Materials")
+        data = pd.DataFrame(worksheet.get_all_records())
+        
+        # Filter for the specific student group
+        filtered_data = data[data['Group'] == group_name]
+        return filtered_data.to_dict('records')
+    except Exception as e:
+        st.error(f"Error fetching materials: {e}")
+        return []
+        
