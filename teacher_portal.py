@@ -1,5 +1,5 @@
 import streamlit as st
-from database_manager import upload_and_log_material, log_temporal_trace
+from database_manager import check_login, upload_and_log_material, get_materials_by_group
 
 def show_teacher_portal(user):
     st.title(f"👨‍🏫 Teacher Command Center")
