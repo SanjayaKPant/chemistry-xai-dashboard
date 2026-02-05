@@ -60,3 +60,15 @@ if all_materials:
     st.table(df_display[['Timestamp', 'Title', 'Mode', 'File_Link']])
 else:
     st.write("No materials found for this group.")
+
+st.subheader("📊 Research Materials Library")
+# Fetch all materials for the current target group
+history = get_materials_by_group(st.session_state.target_group)
+
+if history:
+    for item in history:
+        with st.expander(f"📁 {item['Title']} ({item['Mode']})"):
+            st.write(f"**Description:** {item['Description']}")
+            st.link_button("Open Original File", item['File_Link'])
+else:
+    st.info("No materials have been published for this group yet.")
