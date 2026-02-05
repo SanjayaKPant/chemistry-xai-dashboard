@@ -1,77 +1,63 @@
 import streamlit as st
-from database_manager import check_login, analyze_reasoning_quality
+from database_manager import check_login, analyze_reasoning_quality, log_temporal_trace
 
 st.set_page_config(page_title="Chemistry PhD Portal", layout="wide")
 
-# Initialize session state for the specific gate chosen
-if 'gate' not in st.session_state:
-    st.session_state.gate = None
-if 'user' not in st.session_state:
-    st.session_state.user = None
+if 'gate' not in st.session_state: st.session_state.gate = None
+if 'user' not in st.session_state: st.session_state.user = None
 
-# --- VIEW 1: THE THREE GATES ---
+# --- VIEW 1: THREE GATES ---
 if st.session_state.user is None and st.session_state.gate is None:
-    st.title("🧪 AI for Science: Entry Portal")
-    st.write("Please select your dedicated entry gate:")
-    
+    st.title("🧪 AI for Science: PhD Portal")
+    st.write("Select your access gate:")
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.info("### 🎓 Students")
-        st.write("Access your Chemistry reasoning tasks and AI-integrated lessons.")
-        if st.button("Enter Student Gate"):
+        if st.button("🎓 Student Gate", use_container_width=True):
             st.session_state.gate = "Student"
             st.rerun()
-
     with col2:
-        st.success("### 👨‍🏫 Teachers")
-        st.write("Manage Grade 9 modules and review class-wide misconception reports.")
-        if st.button("Enter Teacher Gate"):
+        if st.button("👨‍🏫 Teacher Gate", use_container_width=True):
             st.session_state.gate = "Teacher"
             st.rerun()
-
     with col3:
-        st.warning("### 🔬 Researchers")
-        st.write("Admin access for deep analytics and temporal trace monitoring.")
-        if st.button("Enter Admin Gate"):
+        if st.button("🔬 Admin/Researcher Gate", use_container_width=True):
             st.session_state.gate = "Admin"
             st.rerun()
 
-# --- VIEW 2: LOGIN FOR CHOSEN GATE ---
+# --- VIEW 2: SECURE LOGIN ---
 elif st.session_state.user is None and st.session_state.gate is not None:
-    st.button("← Back to Gates", on_click=lambda: st.session_state.update({"gate": None}))
-    st.header(f"Login: {st.session_state.gate} Portal")
+    if st.button("← Back"):
+        st.session_state.gate = None
+        st.rerun()
     
-    uid = st.text_input(f"Enter {st.session_state.gate} ID:").strip().upper()
+    st.subheader(f"Secure Login: {st.session_state.gate} Portal")
+    uid = st.text_input("User ID:").strip().upper()
+    pwd = st.text_input("Password:", type="password").strip()
     
-    if st.button("Verify Identity"):
-        res = check_login(uid)
-        # Check if user exists AND matches the gate they chose
-        if res and (res['role'] == st.session_state.gate or (st.session_state.gate == "Admin" and res['role'] == "Supervisor")):
-            st.session_state.user = res
+    if st.button("Login"):
+        user_data = check_login(uid)
+        if user_data and user_data['password'] == pwd and user_data['role'] == st.session_state.gate:
+            st.session_state.user = user_data
+            log_temporal_trace(uid, f"Login to {st.session_state.gate} Gate")
             st.rerun()
         else:
-            st.error(f"Access Denied. This ID is not registered for the {st.session_state.gate} gate.")
+            st.error("Invalid ID, Password, or Gate Permission.")
 
-# --- VIEW 3: THE DASHBOARDS ---
+# --- VIEW 3: DASHBOARDS ---
 else:
     user = st.session_state.user
-    role = user['role']
-    
-    st.sidebar.success(f"Verified: {user['name']}")
+    st.sidebar.success(f"User: {user['name']}")
     if st.sidebar.button("Logout"):
+        log_temporal_trace(user['id'], "Logout")
         st.session_state.user = None
         st.session_state.gate = None
         st.rerun()
 
-    if role in ["Admin", "Supervisor"]:
-        st.title("🔬 Researcher Dashboard")
-        st.write("Tracking misconception frequency across Grade 9 classes.")
-        
-    elif role == "Teacher":
+    if user['role'] == "Admin":
+        st.title("🔬 Researcher Command Center")
+        st.metric("AI Engine", analyze_reasoning_quality([]))
+    elif user['role'] == "Teacher":
         st.title("👨‍🏫 Teacher Portal")
-        st.write("Welcome to the AI-Integrated Lesson Management System.")
-
-    elif role == "Student":
+    elif user['role'] == "Student":
         st.title("🎓 Student Portal")
-        st.write("Ready to investigate the Particulate Nature of Matter?")
