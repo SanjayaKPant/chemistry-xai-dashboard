@@ -1,40 +1,44 @@
 import streamlit as st
-from database_manager import get_materials_by_group
+from database_manager import get_materials_by_group, log_temporal_trace
 
 def show():
-    st.title("🧪 Student Learning Portal")
+    st.header("🧪 Student Learning Portal")
     
-    # 1. Verify the student is logged in
-    if not st.session_state.user:
-        st.warning("Please login through the Student Gate first.")
+    # 1. Verification of Session State
+    if 'user' not in st.session_state or st.session_state.user is None:
+        st.warning("Please log in to access your research materials.")
         return
 
-    user_name = st.session_state.user['name']
-    user_group = st.session_state.user['group'] # e.g., 'Exp_A' or 'Control'
+    user_id = st.session_state.user['id']
+    user_group = st.session_state.user['group']
+    
+    st.info(f"Welcome, **{st.session_state.user['name']}**. Accessing modules for: **{user_group}**")
 
-    st.markdown(f"### Welcome back, **{user_name}**!")
-    st.info(f"📍 Currently viewing materials for group: **{user_group}**")
+    # 2. Vertical Exploration: Fetch and Filter Data
+    # This specifically addresses the 'Group' header error by using the robust fetcher
+    materials = get_materials_by_group(user_group)
 
-    # 2. Fetch materials from GSheets & Drive based on the student's group
-    with st.spinner("Loading your chemistry modules..."):
-        materials = get_materials_by_group(user_group)
-
-    # 3. Display the materials
     if not materials:
-        st.warning("No instructional materials have been published for your group yet. Please check back later.")
-    else:
-        st.write(f"You have **{len(materials)}** modules available:")
-        
-        for item in materials:
-            with st.container(border=True):
-                col1, col2 = st.columns([3, 1])
-                
-                with col1:
-                    st.subheader(f"📘 {item['Title']}")
-                    st.write(f"**Description:** {item['Description']}")
-                    if item.get('Hint'): # Only shows if the teacher provided a hint
-                        st.caption(f"💡 AI Scaffold/Hint: {item['Hint']}")
-                
-                with col2:
-                    # This link opens the PDF directly from your Shared Drive 0AJAe9AoSTt6-Uk9PVA
-                    st.link_button("📖 View Material", item['File_Link'])
+        st.write("No materials have been published for your group yet.")
+        return
+
+    # 3. Interactive Display & Research Logging
+    for item in materials:
+        with st.container(border=True):
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                st.subheader(item['Title'])
+                st.write(item['Description'])
+                # Plan B (Experimental) only: Show AI Scaffolding Hint
+                if user_group == "Exp_A" and item.get('Hint'):
+                    with st.expander("💡 View AI Scaffolding Hint"):
+                        st.write(item['Hint'])
+            
+            with col2:
+                # Vertical Logic: When clicked, it logs the action BEFORE opening the link
+                if st.link_button("📂 Open Material", item['File_Link']):
+                    log_temporal_trace(user_id, f"OPENED_FILE: {item['Title']}")
+
+    st.divider()
+    st.caption("PhD Research System: All interactions are logged for instructional fidelity.")
