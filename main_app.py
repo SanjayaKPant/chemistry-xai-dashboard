@@ -1,6 +1,8 @@
-import streamlit as st
-import pandas as pd
-from database_manager import check_login, log_temporal_trace, get_materials_by_group # 👈 Added the new function
+# --- INITIALIZE SESSION STATE ---
+# Add these lines to main_app.py before any gate logic runs
+if 'gate' not in st.session_state: st.session_state.gate = None
+if 'user' not in st.session_state: st.session_state.user = None
+if 'target_group' not in st.session_state: st.session_state.target_group = "Exp_A"
 
 # --- INITIALIZE SESSION STATE ---
 # This must happen BEFORE any logic runs to prevent 'AttributeError'
