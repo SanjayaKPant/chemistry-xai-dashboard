@@ -1,9 +1,14 @@
 import streamlit as st
 from database_manager import check_login, upload_and_log_material, get_materials_by_group
 
-def show_teacher_portal(user):
-    st.title(f"👨‍🏫 Teacher Command Center")
-    st.subheader(f"User: {user['name']}") #
+def show():
+    st.title("🧑‍🏫 Teacher Command Center")
+    
+    # Ensure target_group exists before the UI renders
+    if 'target_group' not in st.session_state:
+        st.session_state.target_group = "Exp_A"
+        
+    # Rest of your teacher portal code...
     
     # Sidebar for targeting specific experimental groups
     st.sidebar.header("Targeting")
