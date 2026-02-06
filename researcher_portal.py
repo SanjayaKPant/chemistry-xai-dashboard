@@ -29,7 +29,7 @@ def show():
         st.dataframe(mats, use_container_width=True)
 
     with tab3:
-    st.subheader("Engagement Statistics")
-    if not traces.empty:
+        st.subheader("Engagement Statistics")
+        if not traces.empty:
         # Changed from 'Action' to 'Event' to match your sheet headers
         st.bar_chart(traces['Event'].value_counts())
