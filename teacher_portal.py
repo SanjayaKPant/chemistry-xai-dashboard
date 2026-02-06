@@ -1,76 +1,74 @@
 import streamlit as st
-from database_manager import check_login, upload_and_log_material, get_materials_by_group
+import pandas as pd
+from datetime import datetime
+from database_manager import get_gspread_client
 
 def show():
     st.title("🧑‍🏫 Teacher Command Center")
-    
-    # Ensure target_group exists before the UI renders
+    st.markdown("### Instructional Material Deployment")
+
+    # 1. Initialize session variables to prevent AttributeErrors
     if 'target_group' not in st.session_state:
         st.session_state.target_group = "Exp_A"
-        
-    # Rest of your teacher portal code...
+
+    # 2. Database Connection
+    client = get_gspread_client()
+    if not client:
+        st.error("Database connection failed. Please check credentials.")
+        return
+
+    sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60"
+    sh = client.open_by_key(sheet_id)
     
-    # Sidebar for targeting specific experimental groups
-    st.sidebar.header("Targeting")
-    selected_group = st.sidebar.selectbox("Target Class Group", ["Exp_A", "Exp_B", "Control"])
-    
-    st.markdown("### 📚 Instructional Material Design")
-    st.write("Upload materials to personalize the learning path for your students.")
-
-    with st.form("teacher_upload_form", clear_on_submit=True):
-        title = st.text_input("Lesson Title (e.g., The Bohr Model)")
-        mode = st.radio("Instructional Track", ["Traditional (Control)", "AI-Integrated (Experimental)"])
+    # 3. Form for Uploading Materials (Vertical Depth)
+    with st.form("upload_form", clear_on_submit=True):
+        st.subheader("Publish New Chemistry Module")
         
-        # Direct PDF Upload
-        pdf_file = st.file_uploader("Upload Instructional PDF", type=['pdf'])
+        col1, col2 = st.columns(2)
+        with col1:
+            title = st.text_input("Module Title")
+            # Experimental Variable: Target Group
+            group = st.selectbox("Assign to Group", ["Control", "Exp_A", "Both"])
         
-        desc = st.text_area("Detailed Learning Objectives / Task Instructions")
-        
-        # High Refinement AI Hint for personalized feedback
-        ai_hint = ""
-        if mode == "AI-Integrated (Experimental)":
-            ai_hint = st.text_input("AI Scaffolding Hint (e.g., 'Target misconceptions about electron shells')")
+        with col2:
+            file_link = st.text_input("Google Drive PDF Link")
+            # Research Mode: Traditional vs AI-Scaffolded
+            mode = st.selectbox("Instructional Mode", ["Traditional", "AI-Scaffolded"])
 
-        submit = st.form_submit_button("🚀 Publish & Systematize")
+        description = st.text_area("Module Description")
+        hint = st.text_area("AI Scaffolding Hint (Leave blank for Control)", help="Only visible to Exp_A")
 
-        if submit:
-            if title and pdf_file:
-                with st.spinner("Processing file and updating research database..."):
-                    success = upload_and_log_material(
-                        user['id'], 
-                        selected_group, 
-                        title, 
-                        mode, 
-                        pdf_file, 
-                        desc, 
-                        ai_hint
-                    )
-                    
-                    if success:
-                        log_temporal_trace(user['id'], f"Published {title} to {selected_group}")
-                        st.success(f"✅ Lesson '{title}' is now live for group {selected_group}!")
-                    else:
-                        st.error("Failed to publish. Check tab names in Google Sheets.")
+        submitted = st.form_submit_button("🚀 Publish Module")
+
+        if submitted:
+            if title and file_link:
+                try:
+                    worksheet = sh.worksheet("Instructional_Materials")
+                    new_row = [
+                        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        st.session_state.user['id'],
+                        group, # This matches the 'Group' header in your sheet
+                        title,
+                        description,
+                        file_link,
+                        mode,
+                        hint
+                    ]
+                    worksheet.append_row(new_row)
+                    st.success(f"Successfully published '{title}' to {group} group!")
+                except Exception as e:
+                    st.error(f"Error updating database: {e}")
             else:
-                st.error("Please provide both a Lesson Title and a PDF file.")
+                st.warning("Please provide both a Title and a File Link.")
 
-    # Inside your teacher view function:
-st.divider()
-st.subheader("📊 Previously Published Materials")
-all_materials = get_materials_by_group(st.session_state.target_group)
-
-if all_materials:
-    df_display = pd.DataFrame(all_materials)
-    # Only show relevant columns to the teacher
-    st.table(df_display[['Timestamp', 'Title', 'Mode', 'File_Link']])
-else:
-    st.write("No materials found for this group.")
-
-st.subheader("📊 Previously Published Materials")
-# This uses the session_state we just initialized!
-history = get_materials_by_group(st.session_state.target_group) 
-
-if history:
-    for item in history:
-        with st.expander(f"📁 {item['Title']}"):
-            st.link_button("Open Original PDF", item['File_Link'])
+    # 4. Horizontal Progress: Audit existing materials
+    st.divider()
+    st.subheader("Published Materials Audit")
+    try:
+        mats = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
+        if not mats.empty:
+            st.dataframe(mats, use_container_width=True)
+        else:
+            st.info("No materials published yet.")
+    except:
+        st.write("Awaiting data...")
