@@ -162,4 +162,24 @@ def get_materials_by_group(group_name):
     except Exception as e:
         st.error(f"Error fetching materials: {e}")
         return []
+def log_student_response(user_id, module_id, q_type, response, score, misconception="None"):
+    """
+    Logs structured data for Misconception Detection & Research Analysis.
+    Matches the 'Assessment_Logs' sheet headers.
+    """
+    try:
+        client = get_gspread_client()
+        if not client: return False
         
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        worksheet = sh.worksheet("Assessment_Logs") # Make sure the tab name matches!
+        
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Structure: Timestamp, User, Module, Type, Answer, Score, Misconception
+        new_row = [timestamp, user_id, module_id, q_type, response, score, misconception]
+        worksheet.append_row(new_row)
+        return True
+    except Exception as e:
+        st.error(f"Response Logging Error: {e}")
+        return False
