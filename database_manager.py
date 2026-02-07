@@ -131,7 +131,6 @@ def log_temporal_trace(user_id, event_type, details=""):
         print(f"Integration Error: {e}")
 
 def get_materials_by_group(group_name):
-    """Fetches materials and handles missing column errors gracefully."""
     client = get_gspread_client()
     if not client: return []
     try:
@@ -145,12 +144,20 @@ def get_materials_by_group(group_name):
             
         data = pd.DataFrame(records)
         
-        # Defensive check: ensure 'Group' exists in the sheet
+        # --- NEW: Debugging Info for the Researcher ---
+        # This will show up in your Streamlit app so you can see the mismatch
+        st.write(f"🔍 System Search: Looking for group '{group_name}'")
+        
         if 'Group' not in data.columns:
-            st.error(f"Spreadsheet Error: Column 'Group' not found. Found: {list(data.columns)}")
+            st.error(f"Spreadsheet Error: Header 'Group' not found. Available: {list(data.columns)}")
             return []
             
-        filtered_data = data[data['Group'] == group_name]
+        # Standardize both to avoid Case Sensitivity issues
+        data['Group'] = data['Group'].astype(str).str.strip()
+        
+        # Professional filter: Show materials for specific group OR for 'Both'
+        filtered_data = data[(data['Group'] == group_name) | (data['Group'] == 'Both')]
+        
         return filtered_data.to_dict('records')
     except Exception as e:
         st.error(f"Error fetching materials: {e}")
