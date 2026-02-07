@@ -1,81 +1,88 @@
 import streamlit as st
-from database_manager import get_materials_by_group, log_temporal_trace, log_student_response
+import pandas as pd
+from database_manager import get_materials_by_group, log_student_response
 
 def show():
-    # 1. THE TOOLBAR: Creating a sub-menu within the Student Gate
-    # This makes the app feel like a real Learning Management System (LMS)
+    # --- SIDEBAR TOOLBAR (The Khanmingo Style) ---
+    st.sidebar.header(f"👋 Welcome, {st.session_state.user['id']}")
     st.sidebar.markdown("---")
-    st.sidebar.subheader("🎒 Student Toolkit")
+    
+    # Navigation ToolBar
     menu = st.sidebar.radio(
-        "Navigate to:",
-        ["📚 Learning Modules", "✍️ Practice Quiz", "🧪 AI Science Project", "📊 My Learning Journey"]
+        "Learning Menu",
+        ["📚 Lessons", "📝 Assessment (Quizzes)", "🧪 AI Project (PBL)", "📊 My Progress"]
     )
 
-    if menu == "📚 Learning Modules":
-        render_learning_modules()
-    elif menu == "✍️ Practice Quiz":
-        render_practice_quiz()
-    elif menu == "🧪 AI Science Project":
-        render_ai_project()
-    elif menu == "📊 My Learning Journey":
-        render_progress_dashboard()
+    if menu == "📚 Lessons":
+        render_lessons()
+    elif menu == "📝 Assessment (Quizzes)":
+        render_assessment()
+    elif menu == "🧪 AI Project (PBL)":
+        render_ai_pbl()
 
-def render_learning_modules():
-    st.header("📚 Instructional Materials")
-    user = st.session_state.user
-    materials = get_materials_by_group(user['group'])
+def render_lessons():
+    st.title("📚 Instructional Materials")
+    user_group = st.session_state.user['group']
+    materials = get_materials_by_group(user_group)
 
     if not materials:
-        st.info("No lessons published yet.")
+        st.info("No lessons published for your group yet.")
         return
 
     for item in materials:
-        with st.expander(f"📖 {item['Title']}", expanded=True):
+        with st.container(border=True):
+            st.subheader(item['Title'])
             st.write(item['Description'])
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                st.link_button("📂 Open Study Material", item['File_Link'])
-            with col2:
-                if user['group'] == "Exp_A" and item.get('Hint'):
-                    st.info(f"💡 AI Scaffold: {item['Hint']}")
+            
+            # Plan B: AI Scaffolded Hint
+            if user_group == "Exp_A" and item.get('Hint'):
+                with st.expander("💡 View AI Scaffolding Hint"):
+                    st.info(item['Hint'])
+            
+            st.link_button("📂 View PDF", item['File_Link'])
 
-def render_practice_quiz():
-    st.header("✍️ Assessment & Misconception Detection")
-    st.markdown("Test your understanding of the latest module.")
-    
-    # Example MCQ for Misconception Detection (Chemical Bonding)
-    with st.form("quiz_form"):
-        st.write("**Question 1:** In a covalent bond, what happens to the electrons?")
-        choice = st.radio("Select an answer:", [
-            "A) They are transferred from one atom to another.",
-            "B) They are shared between atoms.",
-            "C) They disappear into the nucleus.",
-            "D) They are only present in metals."
+def render_assessment():
+    st.title("📝 Assessment & Misconception Lab")
+    st.write("Complete this to help us understand your learning journey.")
+
+    # Dynamic Quiz for Misconception Detection
+    with st.form("quiz_one"):
+        st.markdown("### Question 1: Molecular Geometry")
+        st.write("What determines the shape of a molecule according to VSEPR theory?")
+        ans = st.radio("Select one:", [
+            "A) The color of the atoms.",
+            "B) Repulsion between electron pairs.",
+            "C) The total weight of the molecule.",
+            "D) The size of the container."
         ])
         
-        submitted = st.form_submit_button("Submit Answer")
-        if submitted:
-            # Logic: Choice A represents a common misconception (Confusing Ionic with Covalent)
-            score = 1 if "B)" in choice else 0
-            tag = "Ionic-Covalent Confusion" if "A)" in choice else "None"
+        if st.form_submit_button("Submit Response"):
+            # Scoring Logic
+            score = 1 if "B)" in ans else 0
+            # Misconception Tagging (PhD Research Data)
+            m_tag = "Size-Shape Confusion" if "D)" in ans else "None"
             
-            # Use our new Assessment_Logs logic!
-            log_student_response(
+            success = log_student_response(
                 user_id=st.session_state.user['id'],
-                module_id="CHEM_101",
+                module_id="MOD_VSEPR",
                 q_type="MCQ",
-                response=choice,
+                response=ans,
                 score=score,
-                misconception=tag
+                misconception=m_tag
             )
-            st.success("Response recorded for PhD analysis!")
+            if success:
+                st.success("Result logged in 'Assessment_Logs'!")
 
-def render_ai_project():
-    st.header("🧪 AI-Integrated Science Project")
-    st.info("This section will host your Machine Learning / Deep Learning PBL tools.")
-    # Placeholder for the ML/DL models you mentioned
-    st.write("Current Phase: Exploring Molecular Prediction Models.")
-
-def render_progress_dashboard():
-    st.header("📊 My Learning Journey")
-    st.write("Visualize your growth and conceptual change here.")
+def render_ai_pbl():
+    st.title("🧪 AI-Integrated Science Project")
+    st.info("Welcome to the Project-Based Learning (PBL) Zone.")
+    
+    st.markdown("### 🤖 Molecular Property Predictor (ML Demo)")
+    st.write("Input molecular data below to see how our AI predicts boiling points.")
+    
+    molecular_weight = st.number_input("Enter Molecular Weight", 0, 500)
+    if st.button("Run AI Prediction"):
+        # This is where your ML/DL models will eventually sit
+        prediction = molecular_weight * 0.5 + 10 # Simulated ML Logic
+        st.metric("Predicted Boiling Point (°C)", f"{prediction}")
+        st.write("**Explainable AI (XAI) Note:** The model prioritized weight over bond type for this prediction.")
