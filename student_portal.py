@@ -87,3 +87,27 @@ def render_ai_pbl():
         prediction = (mol_weight * 1.5) + 20 
         st.metric("Predicted Boiling Point", f"{round(prediction, 2)} °C")
         st.caption("XAI Insight: Model weight assigned 85% importance to molecular mass.")
+def render_socratic_chat():
+    st.title("🤖 Socratic Chemistry Tutor")
+    
+    # 1. Look at the last 4-tier response to personalize the chat
+    # This is where your PhD research "Diagnostic" happens!
+    if "last_tier_score" not in st.session_state:
+        st.info("Complete a Practice Quiz first so I can guide you better!")
+    
+    # 2. The Chat Interface
+    if "messages" not in st.session_state:
+        st.session_state.messages = [{"role": "assistant", "content": "I see you're working on Molecular Structures. What part of the 'Bent' shape is most confusing?"}]
+
+    for msg in st.session_state.messages:
+        st.chat_message(msg["role"]).write(msg["content"])
+
+    if prompt := st.chat_input():
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        st.chat_message("user").write(prompt)
+        
+        # SOCRATIC LOGIC: Never give the answer, ask about the "Reason" (Tier 3)
+        response = "That's a great start. If we think about the electron pairs, how might they push the hydrogen atoms away?"
+        
+        st.session_state.messages.append({"role": "assistant", "content": response})
+        st.chat_message("assistant").write(response)
