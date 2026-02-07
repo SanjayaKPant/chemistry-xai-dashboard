@@ -100,10 +100,30 @@ def render_misconception_tracker():
     except:
         st.error("Could not load Assessment_Logs. Ensure the sheet exists.")
 
-def render_audit_logs():
-    st.subheader("📂 Published Materials Library")
-    # Allows teacher to delete or view previously sent materials
-    client = get_gspread_client()
-    sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-    mats = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
-    st.dataframe(mats, use_container_width=True)
+def render_class_analytics():
+    st.subheader("🔮 Predictive Student Insights")
+    
+    # Example logic: Predicting who needs help
+    # In industry, this would be a trained Scikit-learn model
+    try:
+        client = get_gspread_client()
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        logs = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
+        
+        if not logs.empty:
+            # Simple Prediction: Students with Score < 0.5 are 'At Risk'
+            avg_scores = logs.groupby('User_ID')['Score'].mean().reset_index()
+            avg_scores['Status'] = avg_scores['Score'].apply(lambda x: "✅ On Track" if x > 0.7 else "⚠️ Needs Support")
+            
+            # Professional Metric Cards
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Average Class Score", f"{int(avg_scores['Score'].mean()*100)}%")
+            col2.metric("Active Students", len(avg_scores))
+            col3.metric("Critical Misconceptions", len(logs[logs['Misconception'] != "None"]))
+
+            st.write("### Student Support Queue")
+            st.table(avg_scores.sort_values(by="Score"))
+        else:
+            st.info("Insufficient data for predictions yet.")
+    except:
+        st.write("Awaiting data flow...")
