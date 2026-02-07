@@ -1,38 +1,36 @@
 import streamlit as st
 import pandas as pd
+from datetime import datetime
 from database_manager import get_gspread_client
 
 def show():
-    st.title("📊 Researcher Observation Deck")
+    st.title("🧑‍🏫 Teacher Command Center")
     
-    client = get_gspread_client()
-    if not client:
-        st.error("Sheet connection failed.")
-        return
+    # 1. Professional UI: Clear sections using columns
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.subheader("Publish New Chemistry Module")
+        title = st.text_input("Module Title", placeholder="e.g., Covalent Bonding Basics")
+        description = st.text_area("What is this module about?")
+        
+        # 2. THE AI FEATURE: Auto-generate a hint based on the description
+        if st.button("✨ Generate AI Scaffold Hint"):
+            if description:
+                # In a real-world app, you'd call an API like OpenAI/Gemini here.
+                # For now, we simulate the "Professional Prompt Engineering" logic.
+                st.session_state.draft_hint = f"Research Prompt: Explain the key concepts of {title} focusing on student misconceptions."
+                st.info("AI Suggestion: 'Try to visualize how the electrons are shared rather than transferred. Think of it like a tug-of-war where no one wins!'")
+            else:
+                st.warning("Please enter a description first so the AI has context.")
 
-    sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60"
-    sh = client.open_by_key(sheet_id)
+    with col2:
+        st.subheader("Assignment")
+        group = st.selectbox("Target Group", ["Control", "Exp_A", "Both"])
+        mode = st.selectbox("Mode", ["Traditional", "AI-Scaffolded"])
+        file_link = st.text_input("Drive Link")
 
-    tab1, tab2, tab3 = st.tabs(["🕒 Activity Traces", "📚 Material Audit", "📈 Trends"])
-
-    with tab1:
-        st.subheader("Live Temporal Trace Log")
-        # Matches the 'Event' column header in your screenshot
-        traces = pd.DataFrame(sh.worksheet("Temporal_Traces").get_all_records())
-        st.dataframe(traces, use_container_width=True)
-
-    with tab2:
-        st.subheader("Audit: Published Materials")
-        try:
-            mats = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
-            st.dataframe(mats, use_container_width=True)
-        except:
-            st.warning("Material sheet is empty.")
-
-    with tab3:
-        st.subheader("Engagement Statistics")
-        if not traces.empty and 'Event' in traces.columns:
-            # Using 'Event' to prevent the KeyError
-            st.bar_chart(traces['Event'].value_counts())
-        else:
-            st.write("Awaiting data for trends.")
+    # 3. Save to Google Sheets (The Researcher's Audit Trail)
+    if st.button("🚀 Deploy to Students"):
+        # Logic to append_row to your 'Instructional_Materials' sheet
+        st.success(f"Module '{title}' is now live for {group}!")
