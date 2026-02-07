@@ -1,36 +1,64 @@
 import streamlit as st
+from database_manager import upload_and_log_material, get_gspread_client
 import pandas as pd
-from datetime import datetime
-from database_manager import get_gspread_client
 
 def show():
     st.title("🧑‍🏫 Teacher Command Center")
-    
-    # 1. Professional UI: Clear sections using columns
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        st.subheader("Publish New Chemistry Module")
-        title = st.text_input("Module Title", placeholder="e.g., Covalent Bonding Basics")
-        description = st.text_area("What is this module about?")
+    st.markdown("### Deploy Instructional Modules & AI Scaffolding")
+
+    # 1. User Context: The app needs to know WHO is uploading
+    teacher_id = st.session_state.user['id']
+
+    # 2. The Input Form: Grouped for clarity
+    with st.form("teacher_upload_form", clear_on_submit=True):
+        col1, col2 = st.columns(2)
         
-        # 2. THE AI FEATURE: Auto-generate a hint based on the description
-        if st.button("✨ Generate AI Scaffold Hint"):
-            if description:
-                # In a real-world app, you'd call an API like OpenAI/Gemini here.
-                # For now, we simulate the "Professional Prompt Engineering" logic.
-                st.session_state.draft_hint = f"Research Prompt: Explain the key concepts of {title} focusing on student misconceptions."
-                st.info("AI Suggestion: 'Try to visualize how the electrons are shared rather than transferred. Think of it like a tug-of-war where no one wins!'")
+        with col1:
+            title = st.text_input("Module Title", placeholder="e.g., Atomic Structure")
+            group = st.selectbox("Target Student Group", ["Control", "Exp_A", "Both"])
+            mode = st.selectbox("Instructional Mode", ["Traditional", "AI-Scaffolded"])
+        
+        with col2:
+            # The File Uploader: This handles the actual PDF
+            uploaded_file = st.file_uploader("Upload Chemistry PDF", type=['pdf'])
+            description = st.text_area("Learning Objectives", placeholder="What should students learn?")
+
+        # Plan B Variable: The AI Scaffold
+        hint = st.text_area("AI-Generated Hint (Optional)", help="Only visible to Experimental Group A")
+
+        submit_button = st.form_submit_button("🚀 Deploy to Shared Research Drive")
+
+        # 3. The Logic Bridge: Connecting to Database Manager
+        if submit_button:
+            if uploaded_file and title:
+                # We call the function you just double-checked!
+                success = upload_and_log_material(
+                    teacher_id=teacher_id,
+                    group=group,
+                    title=title,
+                    mode=mode,
+                    file_obj=uploaded_file,
+                    desc=description,
+                    hint=hint
+                )
+                
+                if success:
+                    st.success(f"Successfully published '{title}'! Data logged for research.")
+                    st.balloons()
+                else:
+                    st.error("Deployment failed. Check the logs in database_manager.")
             else:
-                st.warning("Please enter a description first so the AI has context.")
+                st.warning("Please provide both a Title and a PDF file.")
 
-    with col2:
-        st.subheader("Assignment")
-        group = st.selectbox("Target Group", ["Control", "Exp_A", "Both"])
-        mode = st.selectbox("Mode", ["Traditional", "AI-Scaffolded"])
-        file_link = st.text_input("Drive Link")
-
-    # 3. Save to Google Sheets (The Researcher's Audit Trail)
-    if st.button("🚀 Deploy to Students"):
-        # Logic to append_row to your 'Instructional_Materials' sheet
-        st.success(f"Module '{title}' is now live for {group}!")
+    # 4. Horizontal Progress: Live Audit for the Teacher
+    st.divider()
+    st.subheader("Current Published Materials")
+    # This helps the teacher verify that the "Bridge" to Google Sheets is working
+    try:
+        client = get_gspread_client()
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        mats = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
+        if not mats.empty:
+            st.dataframe(mats, use_container_width=True)
+    except:
+        st.info("Awaiting first deployment...")
