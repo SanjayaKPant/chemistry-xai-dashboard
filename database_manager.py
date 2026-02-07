@@ -110,16 +110,25 @@ def upload_and_log_material(teacher_id, group, title, mode, file_obj, desc, hint
         st.error(f"❌ Systematic Error: {e}")
         return False
 
-def log_temporal_trace(user_id, action):
-    """Records user actions for research data integrity."""
-    client = get_gspread_client()
-    if client:
-        try:
-            sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60"
-            sh = client.open_by_key(sheet_id)
-            worksheet = sh.worksheet("Temporal_Traces") 
-            worksheet.append_row([user_id, action, datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
-        except: pass
+def log_temporal_trace(user_id, event_type, details=""):
+    """
+    Logs every student click for PhD Temporal Analysis.
+    Ensures the code supports the 'Temporal_Traces' sheet design.
+    """
+    try:
+        client = get_gspread_client()
+        # Ensure this ID matches your specific sheet
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        worksheet = sh.worksheet("Temporal_Traces")
+        
+        # Professional standard: Always include a timestamp for time-series analysis
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # This list MUST match your spreadsheet columns perfectly
+        new_entry = [timestamp, user_id, event_type, details]
+        worksheet.append_row(new_entry)
+    except Exception as e:
+        print(f"Integration Error: {e}")
 
 def get_materials_by_group(group_name):
     """Fetches materials and handles missing column errors gracefully."""
