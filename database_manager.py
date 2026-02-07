@@ -92,7 +92,7 @@ def upload_and_log_material(teacher_id, group, title, mode, file_obj, desc, hint
         # Grant permissions so participants can view the material
         drive_service.permissions().create(
             fileId=drive_file.get('id'), 
-            body={'type': 'anyone', 'role': 'viewer'},
+            body={'type': 'anyone', 'role': 'reader'},
             supportsAllDrives=True
         ).execute()
         
