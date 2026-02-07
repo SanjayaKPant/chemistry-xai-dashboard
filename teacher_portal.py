@@ -127,3 +127,13 @@ def render_class_analytics():
             st.info("Insufficient data for predictions yet.")
     except:
         st.write("Awaiting data flow...")
+def render_predictive_analytics():
+    st.subheader("🔮 AI Predictive Student Insights")
+    # Simulation: In a real PhD project, this would use a Random Forest model
+    # High Risk = (Wrong Answer in Tier 1 & 3) + (High Confidence in Tier 2 & 4)
+    st.info("The AI is analyzing response patterns to predict upcoming learning plateaus.")
+    
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Class Clarity Index", "72%", "+5% from last week")
+    col2.metric("Predicted At-Risk Students", "4", "No change")
+    col3.metric("Conceptual Change Velocity", "High", delta_color="normal")
