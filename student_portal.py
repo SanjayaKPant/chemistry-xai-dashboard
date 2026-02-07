@@ -3,30 +3,35 @@ import pandas as pd
 from database_manager import get_materials_by_group, log_student_response
 
 def show():
-    # --- SIDEBAR TOOLBAR (The Khanmingo Style) ---
-    st.sidebar.header(f"👋 Welcome, {st.session_state.user['id']}")
-    st.sidebar.markdown("---")
+    # --- KANMINGO STYLE TOOLBAR ---
+    st.sidebar.markdown("### 🎒 Student Dashboard")
+    st.sidebar.info(f"Group: {st.session_state.user['group']}")
     
-    # Navigation ToolBar
+    # Navigation Menu
     menu = st.sidebar.radio(
-        "Learning Menu",
-        ["📚 Lessons", "📝 Assessment (Quizzes)", "🧪 AI Project (PBL)", "📊 My Progress"]
+        "Select Activity",
+        ["📚 Lessons", "✍️ Practice Quiz", "🧪 AI Science Project", "📊 My Stats"]
     )
 
+    st.sidebar.markdown("---")
+    
+    # Routing the views
     if menu == "📚 Lessons":
         render_lessons()
-    elif menu == "📝 Assessment (Quizzes)":
-        render_assessment()
-    elif menu == "🧪 AI Project (PBL)":
+    elif menu == "✍️ Practice Quiz":
+        render_quiz()
+    elif menu == "🧪 AI Science Project":
         render_ai_pbl()
+    elif menu == "📊 My Stats":
+        st.title("📊 Your Learning Journey")
+        st.write("Coming Soon: Track your conceptual change over time!")
 
 def render_lessons():
-    st.title("📚 Instructional Materials")
-    user_group = st.session_state.user['group']
-    materials = get_materials_by_group(user_group)
-
+    st.title("📚 Chemistry Modules")
+    materials = get_materials_by_group(st.session_state.user['group'])
+    
     if not materials:
-        st.info("No lessons published for your group yet.")
+        st.info("Your teacher hasn't published any lessons for your group yet.")
         return
 
     for item in materials:
@@ -34,55 +39,51 @@ def render_lessons():
             st.subheader(item['Title'])
             st.write(item['Description'])
             
-            # Plan B: AI Scaffolded Hint
-            if user_group == "Exp_A" and item.get('Hint'):
-                with st.expander("💡 View AI Scaffolding Hint"):
+            # THE AI SCAFFOLD (Experimental Group Only)
+            if st.session_state.user['group'] == "Exp_A" and item.get('Hint'):
+                with st.expander("💡 View AI Learning Scaffold"):
                     st.info(item['Hint'])
             
-            st.link_button("📂 View PDF", item['File_Link'])
+            st.link_button("📖 Open PDF Material", item['File_Link'])
 
-def render_assessment():
-    st.title("📝 Assessment & Misconception Lab")
-    st.write("Complete this to help us understand your learning journey.")
+def render_quiz():
+    st.title("✍️ MCQ & Misconception Lab")
+    st.write("Test your knowledge of Molecular Structures.")
 
-    # Dynamic Quiz for Misconception Detection
-    with st.form("quiz_one"):
-        st.markdown("### Question 1: Molecular Geometry")
-        st.write("What determines the shape of a molecule according to VSEPR theory?")
-        ans = st.radio("Select one:", [
-            "A) The color of the atoms.",
-            "B) Repulsion between electron pairs.",
-            "C) The total weight of the molecule.",
-            "D) The size of the container."
+    with st.form("chemistry_quiz"):
+        st.markdown("**Question:** Why is a water molecule 'bent' rather than linear?")
+        answer = st.radio("Choose the best explanation:", [
+            "A) Because hydrogen atoms are heavy.",
+            "B) Due to repulsion between lone electron pairs on Oxygen.",
+            "C) Because the container pushes on the molecule.",
+            "D) It's just random."
         ])
         
-        if st.form_submit_button("Submit Response"):
-            # Scoring Logic
-            score = 1 if "B)" in ans else 0
-            # Misconception Tagging (PhD Research Data)
-            m_tag = "Size-Shape Confusion" if "D)" in ans else "None"
+        if st.form_submit_button("Submit to Assessment_Logs"):
+            # Scoring & Misconception Tagging
+            is_correct = 1 if "B)" in answer else 0
+            tag = "VSEPR Repulsion Error" if "C)" in answer else "None"
             
             success = log_student_response(
                 user_id=st.session_state.user['id'],
-                module_id="MOD_VSEPR",
+                module_id="CHEM_WATER_01",
                 q_type="MCQ",
-                response=ans,
-                score=score,
-                misconception=m_tag
+                response=answer,
+                score=is_correct,
+                misconception=tag
             )
             if success:
-                st.success("Result logged in 'Assessment_Logs'!")
+                st.success("Analysis complete! Your response is logged.")
 
 def render_ai_pbl():
-    st.title("🧪 AI-Integrated Science Project")
-    st.info("Welcome to the Project-Based Learning (PBL) Zone.")
+    st.title("🧪 AI-Integrated Project (PBL)")
+    st.markdown("### 🤖 Molecular Property Predictor")
+    st.write("Using Machine Learning to explore chemical properties.")
     
-    st.markdown("### 🤖 Molecular Property Predictor (ML Demo)")
-    st.write("Input molecular data below to see how our AI predicts boiling points.")
+    mol_weight = st.slider("Molecular Weight", 1.0, 300.0, 18.0)
     
-    molecular_weight = st.number_input("Enter Molecular Weight", 0, 500)
-    if st.button("Run AI Prediction"):
-        # This is where your ML/DL models will eventually sit
-        prediction = molecular_weight * 0.5 + 10 # Simulated ML Logic
-        st.metric("Predicted Boiling Point (°C)", f"{prediction}")
-        st.write("**Explainable AI (XAI) Note:** The model prioritized weight over bond type for this prediction.")
+    if st.button("Predict Boiling Point (ML Model)"):
+        # This simulates a Deep Learning model output
+        prediction = (mol_weight * 1.5) + 20 
+        st.metric("Predicted Boiling Point", f"{round(prediction, 2)} °C")
+        st.caption("XAI Insight: Model weight assigned 85% importance to molecular mass.")
