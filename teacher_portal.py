@@ -50,26 +50,32 @@ def render_deployment_zone():
                 st.warning("Please provide a title and a file.")
 
 def render_class_analytics():
-    st.subheader("📈 Real-time Student Engagement")
+    st.subheader("🔮 Predictive Student Insights")
+    
+    # Example logic: Predicting who needs help
+    # In industry, this would be a trained Scikit-learn model
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        logs = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
         
-        # Load the logs we created earlier
-        traces = pd.DataFrame(sh.worksheet("Temporal_Traces").get_all_records())
-        
-        if not traces.empty:
-            col1, col2 = st.columns(2)
-            with col1:
-                st.write("**Activity by Event Type**")
-                st.bar_chart(traces['Event'].value_counts())
-            with col2:
-                st.write("**Top Active Students**")
-                st.dataframe(traces['User_ID'].value_counts(), use_container_width=True)
+        if not logs.empty:
+            # Simple Prediction: Students with Score < 0.5 are 'At Risk'
+            avg_scores = logs.groupby('User_ID')['Score'].mean().reset_index()
+            avg_scores['Status'] = avg_scores['Score'].apply(lambda x: "✅ On Track" if x > 0.7 else "⚠️ Needs Support")
+            
+            # Professional Metric Cards
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Average Class Score", f"{int(avg_scores['Score'].mean()*100)}%")
+            col2.metric("Active Students", len(avg_scores))
+            col3.metric("Critical Misconceptions", len(logs[logs['Misconception'] != "None"]))
+
+            st.write("### Student Support Queue")
+            st.table(avg_scores.sort_values(by="Score"))
         else:
-            st.info("No student activity recorded yet.")
+            st.info("Insufficient data for predictions yet.")
     except:
-        st.write("Awaiting data...")
+        st.write("Awaiting data flow...")
 
 def render_misconception_tracker():
     st.subheader("🧩 Conceptual Change Monitor")
