@@ -49,10 +49,6 @@ def render_deployment_zone():
             else:
                 st.warning("Please provide a title and a file.")
 
-import streamlit as st
-import pandas as pd
-from database_manager import get_gspread_client
-
 def render_class_analytics():
     st.subheader("📊 Real-Time Class Analytics")
     
