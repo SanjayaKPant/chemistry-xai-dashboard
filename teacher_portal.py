@@ -54,49 +54,44 @@ import pandas as pd
 from database_manager import get_gspread_client
 
 def render_class_analytics():
-    st.markdown("## 📊 Class Analytics")
-    st.info("Tracking real-time engagement and 4-tier diagnostic participation.")
-
+    st.subheader("📊 Real-Time Class Analytics")
+    
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         
-        # Load the two critical data sources for your PhD
-        # 1. Behavioral Data (Traces)
-        traces_df = pd.DataFrame(sh.worksheet("Temporal_Traces").get_all_records())
-        # 2. Performance Data (Responses/Assessment_Logs)
-        responses_df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
+        # Load Traces for engagement and Logs for performance
+        traces = pd.DataFrame(sh.worksheet("Temporal_Traces").get_all_records())
+        logs = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records()) # Matches your tab
 
-        if not traces_df.empty:
-            # Metric Row: High-level overview
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Total Interactions", len(traces_df))
-            with col2:
-                active_users = traces_df['User_ID'].nunique()
-                st.metric("Active Students", active_users)
-            with col3:
-                # Calculate how many students completed all 4 tiers
-                completed = responses_df[responses_df['Tier_4'] != ""].shape[0]
-                st.metric("Quiz Completions", completed)
-
-            # Visualizing the "Pulse" of the class
-            st.write("### Student Activity Timeline")
-            # We convert the Timestamp column to ensure proper plotting
-            traces_df['Timestamp'] = pd.to_datetime(traces_df['Timestamp'])
-            st.line_chart(traces_df.set_index('Timestamp')['Event'].value_counts())
+        if not traces.empty:
+            # 1. High-Level Metrics
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Total Engagement Events", len(traces))
+            c2.metric("Unique Students Active", traces['User_ID'].nunique())
             
-            # Group Comparison (Critical for PhD)
-            st.write("### Engagement by Group (Exp_A vs Control)")
-            # This helps you prove if your AI scaffold actually increases engagement
-            group_data = traces_df.groupby('Group').size()
-            st.bar_chart(group_data)
+            # Count completions based on Tier 4 presence
+            completions = logs[logs['Tier_4'].astype(str).str.strip() != ""].shape[0]
+            c3.metric("4-Tier Quiz Completions", completions)
 
+            # 2. Activity Timeline
+            st.write("### Activity Timeline")
+            traces['Timestamp'] = pd.to_datetime(traces['Timestamp'])
+            activity_over_time = traces.groupby(traces['Timestamp'].dt.date).size()
+            st.line_chart(activity_over_time)
+
+            # 3. Group Comparison (Critical for PhD Research)
+            st.write("### Engagement: Exp_A vs Control")
+            # This visualizes if your AI-scaffold group is more active
+            group_counts = traces['Group'].value_counts()
+            st.bar_chart(group_counts)
         else:
-            st.warning("No data found in 'Temporal_Traces'. Encourage students to log in!")
+            st.info("Awaiting student interaction data...")
 
     except Exception as e:
-        st.error(f"Analytics Error: {e}. Please ensure tab names match exactly.")
+        st.error(f"Could not load Analytics: {e}. Ensure 'Temporal_Traces' and 'Assessment_Logs' tabs exist.")
+
+# Ensure this is called in your main 'show()' function in teacher_portal.py
 
 def render_misconception_tracker():
     st.subheader("🧩 Conceptual Change Monitor")
