@@ -162,24 +162,22 @@ def get_materials_by_group(group_name):
     except Exception as e:
         st.error(f"Error fetching materials: {e}")
         return []
-def log_student_response(user_id, module_id, q_type, response, score, misconception="None"):
-    """
-    Logs structured data for Misconception Detection & Research Analysis.
-    Matches the 'Assessment_Logs' sheet headers.
-    """
+def log_student_response(user_id, module_id, t1, t2, t3, t4):
     try:
         client = get_gspread_client()
-        if not client: return False
-        
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        worksheet = sh.worksheet("Assessment_Logs") # Make sure the tab name matches!
+        worksheet = sh.worksheet("Assessment_Logs")
         
+        # 1. Calculate the Diagnostic Result (The 'Science' part)
+        # You will define 'correct_ans' and 'correct_reason' per module
+        status = "Analyzing..." 
+        
+        # 2. Prepare the row for the spreadsheet
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        new_row = [user_id, timestamp, t1, t2, t3, t4, status]
         
-        # Structure: Timestamp, User, Module, Type, Answer, Score, Misconception
-        new_row = [timestamp, user_id, module_id, q_type, response, score, misconception]
         worksheet.append_row(new_row)
         return True
     except Exception as e:
-        st.error(f"Response Logging Error: {e}")
+        st.error(f"Spreadsheet Error: {e}")
         return False
