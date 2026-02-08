@@ -91,22 +91,19 @@ def render_ai_pbl():
 import streamlit as st
 
 def render_socratic_chat():
-    st.markdown("### 🤖 Socratic Chemistry Tutor")
-    st.caption("Let's look at your reasoning from the last quiz.")
-
-    # Khanmingo Style: AI references the student's Tier 3 'Reason'
-    # We will eventually pull this live from your Google Sheet
-    last_reason = "Nucleus is at the center" # Placeholder for Tier 3 data
+    st.title("🤖 Socratic Chemistry Tutor")
     
-    if "messages" not in st.session_state:
-        st.session_state.messages = [{"role": "assistant", "content": f"You mentioned that '{last_reason}'. If that's the case, what do you think keeps the electrons from flying away?"}]
-
-    for msg in st.session_state.messages:
-        st.chat_message(msg["role"]).write(msg["content"])
-
-    if prompt := st.chat_input("Think about the forces involved..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        # The AI asks another question instead of giving the answer
-        response = "Interesting! Does that force come from the protons or the neutrons?"
-        st.session_state.messages.append({"role": "assistant", "content": response})
-        st.rerun()
+    # Check if student is in Exp_A group
+    if st.session_state.user['group'] == "Exp_A":
+        st.info("Socratic Mode: Active. I will help you investigate your Tier 3 reasoning.")
+        
+        if prompt := st.chat_input("Explain why you chose your last answer..."):
+            # SOCRATIC RULE: If student gives a reason, ask about the 'Why' or 'How'
+            # Example: If they say 'Electrons move', ask 'What force moves them?'
+            st.chat_message("user").write(prompt)
+            
+            # This is where we will later plug in the Gemini API
+            response = "That's an interesting observation about the electrons. How does their charge affect that movement?"
+            st.chat_message("assistant").write(response)
+    else:
+        st.warning("Control Group: Socratic Chat is disabled for research consistency.")
