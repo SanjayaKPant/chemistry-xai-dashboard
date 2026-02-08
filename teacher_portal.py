@@ -30,20 +30,29 @@ def render_class_analytics():
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         
-        # Pull data from your actual Google Sheet tabs
+        # Pull data from Assessment_Logs
         logs = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
         
         if not logs.empty:
             col1, col2 = st.columns(2)
-            # Count how many students finished Tier 4
-            completions = logs[logs['Tier_4'].astype(str).str.strip() != ""].shape[0]
-            col1.metric("4-Tier Completions", completions)
+            
+            # Robust check for Tier_4
+            if 'Tier_4' in logs.columns:
+                completions = logs[logs['Tier_4'].astype(str).str.strip() != ""].shape[0]
+                col1.metric("4-Tier Completions", completions)
+            else:
+                col1.metric("4-Tier Completions", "0")
+                st.warning("⚠️ Column 'Tier_4' not detected. Check your spreadsheet headers.")
+
             col2.metric("Total Entries", len(logs))
             
-            st.write("### Tier 1: Distribution of Initial Answers")
-            st.bar_chart(logs['Tier_1'].value_counts())
+            # Show the actual data for debugging
+            with st.expander("🔍 Inspect Raw Log Data"):
+                st.dataframe(logs)
+                
         else:
             st.info("Awaiting data from student participants...")
+            
     except Exception as e:
         st.error(f"Analytics Error: {e}")
 
