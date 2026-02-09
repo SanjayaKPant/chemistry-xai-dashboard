@@ -4,20 +4,20 @@ from datetime import datetime
 from database_manager import get_gspread_client
 
 def show():
-    # Fix for the NameError: All functions are now defined below
     st.title("🎓 Student Learning Portal")
     
-    # Identify user group for research distinction
+    # Identify user group
     user_group = st.session_state.user.get('group', 'Control')
     st.sidebar.info(f"Research Group: {user_group}")
 
-    # Menu items - AI Science Project is for Exp_A only
+    # Menu logic: Socratic Tutor is Exp_A exclusive
     menu = ["📚 Lessons", "✍️ 4-Tier Practice Quiz", "📊 My Progress"]
     if user_group == "Exp_A":
         menu.insert(2, "🤖 Socratic Tutor")
     
     choice = st.sidebar.radio("Select Activity", menu)
 
+    # Fixed NameErrors by defining all functions below
     if choice == "📚 Lessons":
         render_lessons(user_group)
     elif choice == "✍️ 4-Tier Practice Quiz":
@@ -28,60 +28,61 @@ def show():
         render_progress()
 
 def render_lessons(group):
-    st.header("📚 Chemistry Modules")
-    try:
-        client = get_gspread_client()
-        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        mats = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
+    st.header("📚 Chemistry Modules: Acids, Bases & Salts")
+    
+    # --- DEMO LESSON 1: THE ARRHENIUS CONCEPT ---
+    with st.container(border=True):
+        st.subheader("Lesson 1: Introduction to Acids and Bases")
+        st.write("""
+        **Content:** According to the Arrhenius theory, an Acid is a substance that provides hydrogen ions ($H^+$) in aqueous solution, 
+        while a Base provides hydroxide ions ($OH^-$). 
+        * *Example Acid:* $HCl \rightarrow H^+ + Cl^-$
+        * *Example Base:* $NaOH \rightarrow Na^+ + OH^-$
+        """)
         
-        # Filter lessons by the student's assigned group
-        my_mats = mats[mats['Group'] == group]
+        if group == "Exp_A":
+            with st.expander("💡 AI Learning Scaffold (Socratic Hint)"):
+                st.info("Think about the 'Aqueous' part. What would happen to these substances if there was no water present?")
         
-        if not my_mats.empty:
-            for _, row in my_mats.iterrows():
-                with st.expander(f"📖 {row['Module_Name']}"):
-                    st.write(f"**Objective:** {row['Learning_Objective']}")
-                    if group == "Exp_A":
-                        st.info("💡 AI Hint: focus on how particles interact, not just their names.")
-                    st.button("Open PDF Material", key=row['Module_Name'])
-        else:
-            st.write("No lessons deployed for your group yet.")
-    except:
-        st.error("Could not load lessons.")
+        st.button("View Full PDF: Arrhenius Theory", key="pdf_1")
+
+    # --- DEMO LESSON 2: NEUTRALIZATION & SALTS ---
+    with st.container(border=True):
+        st.subheader("Lesson 2: Neutralization and Salt Formation")
+        st.write("""
+        **Content:** When an acid and a base react, they neutralize each other to produce a Salt and Water.
+        * **Reaction:** $Acid + Base \rightarrow Salt + Water$
+        * *Equation:* $HCl + NaOH \rightarrow NaCl + H_2O$
+        """)
+        
+        if group == "Exp_A":
+            with st.expander("💡 AI Learning Scaffold (Socratic Hint)"):
+                st.info("Consider the ions. If the $H^+$ and $OH^-$ make water, what happens to the remaining $Na^+$ and $Cl^-$ ions in the beaker?")
+        
+        st.button("View Full PDF: Salts and pH", key="pdf_2")
 
 def render_4_tier_quiz(group):
-    st.header("✍️ 4-Tier Diagnostic Quiz")
+    st.header("✍️ 4-Tier Practice Quiz")
+    st.markdown("### **Tier 1: Content**")
+    t1 = st.radio("What ion is responsible for acidic properties in water?", ["$OH^-$", "$H^+$", "$Cl^-$"])
     
-    # The CRITICAL Research Distinction:
-    # Exp_A gets "Immediate Scaffolding" - Control gets "Traditional Assessment"
-    if group == "Exp_A":
-        st.caption("Experimental Mode: AI is monitoring your reasoning for real-time support.")
-    else:
-        st.caption("Control Mode: Traditional linear assessment.")
-
-    with st.form("quiz_form"):
-        st.markdown("### **Tier 1: The Answer**")
-        t1 = st.radio("What is the primary force in a metallic bond?", ["Ionic", "Covalent", "Delocalized Electrons"])
-        
-        st.markdown("### **Tier 2: Confidence**")
-        t2 = st.select_slider("How sure are you?", ["Unsure", "Somewhat Sure", "Very Sure"], key="t2")
-        
-        st.markdown("### **Tier 3: The Reason**")
-        t3 = st.text_area("Explain the chemical principle behind your choice:")
-        
-        st.markdown("### **Tier 4: Reasoning Confidence**")
-        t4 = st.select_slider("How sure are you of your explanation?", ["Unsure", "Somewhat Sure", "Very Sure"], key="t4")
-        
-        if st.form_submit_button("Submit Assessment"):
-            # Save logic here...
-            st.success("Responses recorded for research analysis.")
+    st.markdown("### **Tier 2: Confidence**")
+    t2 = st.select_slider("How sure are you?", ["Unsure", "Sure", "Very Sure"], key="t2")
+    
+    st.markdown("### **Tier 3: Reasoning**")
+    t3 = st.text_area("Explain why you chose that ion:")
+    
+    st.markdown("### **Tier 4: Confidence**")
+    t4 = st.select_slider("How sure are you of your reason?", ["Unsure", "Sure", "Very Sure"], key="t4")
+    
+    if st.form_submit_button("Submit"):
+        st.success("Responses recorded for diagnostic analysis.")
 
 def render_socratic_tutor():
-    # This tab only exists for Exp_A
-    st.header("🤖 Socratic Science Tutor")
-    st.write("I will help you explore your Tier 3 reasoning. Let's start: Why do you think electrons become 'delocalized'?")
-    st.chat_input("Your explanation...")
+    st.header("🤖 Socratic Tutor")
+    st.write("Welcome to the Experimental Group's AI assistant. Let's discuss your thoughts on pH.")
+    st.chat_input("Explain why you think lemon juice is acidic...")
 
 def render_progress():
     st.header("📊 My Progress")
-    st.write("Your conceptual growth tracking will appear here as you complete modules.")
+    st.write("Diagnostic results will be displayed here after completion.")
