@@ -1,109 +1,105 @@
 import streamlit as st
 import pandas as pd
-from database_manager import get_materials_by_group, log_student_response
+from datetime import datetime
+from database_manager import get_gspread_client, log_student_response
 
 def show():
-    # --- KANMINGO STYLE TOOLBAR ---
-    st.sidebar.markdown("### 🎒 Student Dashboard")
-    st.sidebar.info(f"Group: {st.session_state.user['group']}")
+    st.title("🎓 Student Learning Portal")
     
-    # Navigation Menu
-    menu = st.sidebar.radio(
-        "Select Activity",
-        ["📚 Lessons", "✍️ Practice Quiz", "🧪 AI Science Project", "📊 My Stats"]
-    )
+    # Sidebar Info
+    st.sidebar.success(f"Group: {st.session_state.user['group']}")
+    
+    menu = ["📚 Lessons", "✍️ 4-Tier Practice Quiz", "🤖 Socratic Tutor", "📊 My Progress"]
+    choice = st.sidebar.radio("Select Activity", menu)
 
-    st.sidebar.markdown("---")
-    
-    # Routing the views
-    if menu == "📚 Lessons":
+    if choice == "📚 Lessons":
         render_lessons()
-    elif menu == "✍️ Practice Quiz":
-        render_quiz()
-    elif menu == "🧪 AI Science Project":
-        render_ai_pbl()
-    elif menu == "📊 My Stats":
-        st.title("📊 Your Learning Journey")
-        st.write("Coming Soon: Track your conceptual change over time!")
+    elif choice == "✍️ 4-Tier Practice Quiz":
+        render_4_tier_quiz()
+    elif choice == "🤖 Socratic Tutor":
+        render_socratic_tutor()
+    elif choice == "📊 My Progress":
+        render_progress()
 
-def render_lessons():
-    st.title("📚 Chemistry Modules")
-    materials = get_materials_by_group(st.session_state.user['group'])
+def render_4_tier_quiz():
+    st.header("🧪 4-Tier Conceptual Assessment")
+    st.info("Answer carefully. Your confidence levels help the AI guide you better.")
+
+    with st.form("quiz_form"):
+        # TIER 1: Content Answer
+        st.markdown("### **Tier 1: Content Question**")
+        t1_ans = st.radio("What happens to water molecules when water boils?", 
+                         ["They break into H and O atoms", "They move further apart", "They get larger"])
+
+        # TIER 2: Content Confidence
+        st.markdown("### **Tier 2: Confidence (Answer)**")
+        t2_conf = st.select_slider("How sure are you about your answer?", 
+                                  options=["Very Unsure", "Unsure", "Sure", "Very Sure"], key="t2")
+
+        # TIER 3: Reasoning
+        st.markdown("### **Tier 3: Reasoning**")
+        t3_reas = st.radio("Why did you choose that answer?", 
+                          ["Heat breaks chemical bonds", "Increased kinetic energy overcomes intermolecular forces", "Molecules expand when heated"])
+
+        # TIER 4: Reasoning Confidence
+        st.markdown("### **Tier 4: Confidence (Reasoning)**")
+        t4_conf = st.select_slider("How sure are you about your reason?", 
+                                  options=["Very Unsure", "Unsure", "Sure", "Very Sure"], key="t4")
+
+        submit_quiz = st.form_submit_button("Submit Assessment")
+
+        if submit_quiz:
+            # 🔬 RESEARCH LOGIC: Perform Diagnostic
+            result, tag = perform_diagnostic(t1_ans, t2_conf, t3_reas, t4_conf)
+            
+            # Save to Assessment_Logs with all 10 headers
+            success = log_student_response(
+                st.session_state.user['id'],
+                "WATER_BOIL_01",
+                t1_ans, t2_conf, t3_reas, t4_conf,
+                result, tag, st.session_state.user['group']
+            )
+            
+            if success:
+                st.success(f"Assessment Logged! Result: {result}")
+                if st.session_state.user['group'] == "Exp_A":
+                    st.write("🤖 **Socratic Tutor is now ready to discuss your reasoning!**")
+
+def perform_diagnostic(t1, t2, t3, t4):
+    """
+    🔬 PhD Research Logic: 
+    Categorizes the student based on 4-tier response patterns.
+    """
+    # Simplified logic for demonstration (customize based on your key)
+    correct_t1 = "They move further apart"
+    correct_t3 = "Increased kinetic energy overcomes intermolecular forces"
     
-    if not materials:
-        st.info("Your teacher hasn't published any lessons for your group yet.")
+    is_high_conf = t2 in ["Sure", "Very Sure"] and t4 in ["Sure", "Very Sure"]
+    
+    if t1 == correct_t1 and t3 == correct_t3 and is_high_conf:
+        return "Scientific Knowledge", "None"
+    elif t1 == correct_t1 and t3 != correct_t3 and is_high_conf:
+        return "Misconception", "Reasoning-Gap"
+    elif t1 != correct_t1 and is_high_conf:
+        return "Misconception", "Fundamental-Error"
+    else:
+        return "Lack of Knowledge", "Uncertain"
+
+def render_socratic_tutor():
+    st.header("🤖 Socratic Chemistry Assistant")
+    
+    if st.session_state.user['group'] == "Control":
+        st.warning("The AI Tutor is currently only available for the Experimental Group.")
         return
 
-    for item in materials:
-        with st.container(border=True):
-            st.subheader(item['Title'])
-            st.write(item['Description'])
-            
-            # THE AI SCAFFOLD (Experimental Group Only)
-            if st.session_state.user['group'] == "Exp_A" and item.get('Hint'):
-                with st.expander("💡 View AI Learning Scaffold"):
-                    st.info(item['Hint'])
-            
-            st.link_button("📖 Open PDF Material", item['File_Link'])
+    # Socratic logic: Ask "Why" and "How" based on Tier 3
+    if "messages" not in st.session_state:
+        st.session_state.messages = [{"role": "assistant", "content": "I noticed your reasoning about heat breaking bonds. If that happened, what would happen to the identity of the water?"}]
 
-def render_quiz():
-    st.title("✍️ MCQ & Misconception Lab")
-    st.write("Test your knowledge of Molecular Structures.")
+    for msg in st.session_state.messages:
+        st.chat_message(msg["role"]).write(msg["content"])
 
-    with st.form("chemistry_quiz"):
-        st.markdown("**Question:** Why is a water molecule 'bent' rather than linear?")
-        answer = st.radio("Choose the best explanation:", [
-            "A) Because hydrogen atoms are heavy.",
-            "B) Due to repulsion between lone electron pairs on Oxygen.",
-            "C) Because the container pushes on the molecule.",
-            "D) It's just random."
-        ])
-        
-        if st.form_submit_button("Submit to Assessment_Logs"):
-            # Scoring & Misconception Tagging
-            is_correct = 1 if "B)" in answer else 0
-            tag = "VSEPR Repulsion Error" if "C)" in answer else "None"
-            
-            success = log_student_response(
-                user_id=st.session_state.user['id'],
-                module_id="CHEM_WATER_01",
-                q_type="MCQ",
-                response=answer,
-                score=is_correct,
-                misconception=tag
-            )
-            if success:
-                st.success("Analysis complete! Your response is logged.")
-
-def render_ai_pbl():
-    st.title("🧪 AI-Integrated Project (PBL)")
-    st.markdown("### 🤖 Molecular Property Predictor")
-    st.write("Using Machine Learning to explore chemical properties.")
-    
-    mol_weight = st.slider("Molecular Weight", 1.0, 300.0, 18.0)
-    
-    if st.button("Predict Boiling Point (ML Model)"):
-        # This simulates a Deep Learning model output
-        prediction = (mol_weight * 1.5) + 20 
-        st.metric("Predicted Boiling Point", f"{round(prediction, 2)} °C")
-        st.caption("XAI Insight: Model weight assigned 85% importance to molecular mass.")
-
-import streamlit as st
-
-def render_socratic_chat():
-    st.title("🤖 Socratic Chemistry Tutor")
-    
-    # Check if student is in Exp_A group
-    if st.session_state.user['group'] == "Exp_A":
-        st.info("Socratic Mode: Active. I will help you investigate your Tier 3 reasoning.")
-        
-        if prompt := st.chat_input("Explain why you chose your last answer..."):
-            # SOCRATIC RULE: If student gives a reason, ask about the 'Why' or 'How'
-            # Example: If they say 'Electrons move', ask 'What force moves them?'
-            st.chat_message("user").write(prompt)
-            
-            # This is where we will later plug in the Gemini API
-            response = "That's an interesting observation about the electrons. How does their charge affect that movement?"
-            st.chat_message("assistant").write(response)
-    else:
-        st.warning("Control Group: Socratic Chat is disabled for research consistency.")
+    if prompt := st.chat_input():
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        # AI Response logic (to be linked to Gemini)
+        st.rerun()
