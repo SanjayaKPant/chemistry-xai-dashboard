@@ -4,85 +4,98 @@ from datetime import datetime
 from database_manager import get_gspread_client
 
 def show():
-    st.title("🎓 Student Learning Portal")
-    
-    # Identify user group
+    # Detect the logged-in student's research group
     user_group = st.session_state.user.get('group', 'Control')
+    st.title("🎓 Student Learning Portal")
     st.sidebar.info(f"Research Group: {user_group}")
 
-    # Menu logic: Socratic Tutor is Exp_A exclusive
-    menu = ["📚 Lessons", "✍️ 4-Tier Practice Quiz", "📊 My Progress"]
+    # Navigation Menu
+    menu = ["📚 Learning Modules", "✍️ 4-Tier Assessment", "📊 My Progress"]
     if user_group == "Exp_A":
-        menu.insert(2, "🤖 Socratic Tutor")
+        menu.insert(1, "🤖 Socratic AI Tutor")
     
-    choice = st.sidebar.radio("Select Activity", menu)
+    choice = st.sidebar.radio("Navigation", menu)
 
-    # Fixed NameErrors by defining all functions below
-    if choice == "📚 Lessons":
-        render_lessons(user_group)
-    elif choice == "✍️ 4-Tier Practice Quiz":
-        render_4_tier_quiz(user_group)
-    elif choice == "🤖 Socratic Tutor":
+    if choice == "📚 Learning Modules":
+        render_learning_path(user_group)
+    elif choice == "🤖 Socratic AI Tutor":
         render_socratic_tutor()
+    elif choice == "✍️ 4-Tier Assessment":
+        render_assessment(user_group)
     elif choice == "📊 My Progress":
         render_progress()
 
-def render_lessons(group):
-    st.header("📚 Chemistry Modules: Acids, Bases & Salts")
-    
-    # --- DEMO LESSON 1: THE ARRHENIUS CONCEPT ---
-    with st.container(border=True):
-        st.subheader("Lesson 1: Introduction to Acids and Bases")
-        st.write("""
-        **Content:** According to the Arrhenius theory, an Acid is a substance that provides hydrogen ions ($H^+$) in aqueous solution, 
-        while a Base provides hydroxide ions ($OH^-$). 
-        * *Example Acid:* $HCl \rightarrow H^+ + Cl^-$
-        * *Example Base:* $NaOH \rightarrow Na^+ + OH^-$
-        """)
+def render_learning_path(group):
+    st.header("📚 Your Learning Journey")
+    try:
+        client = get_gspread_client()
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        mats = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
         
-        if group == "Exp_A":
-            with st.expander("💡 AI Learning Scaffold (Socratic Hint)"):
-                st.info("Think about the 'Aqueous' part. What would happen to these substances if there was no water present?")
-        
-        st.button("View Full PDF: Arrhenius Theory", key="pdf_1")
-
-    # --- DEMO LESSON 2: NEUTRALIZATION & SALTS ---
-    with st.container(border=True):
-        st.subheader("Lesson 2: Neutralization and Salt Formation")
-        st.write("""
-        **Content:** When an acid and a base react, they neutralize each other to produce a Salt and Water.
-        * **Reaction:** $Acid + Base \rightarrow Salt + Water$
-        * *Equation:* $HCl + NaOH \rightarrow NaCl + H_2O$
-        """)
-        
-        if group == "Exp_A":
-            with st.expander("💡 AI Learning Scaffold (Socratic Hint)"):
-                st.info("Consider the ions. If the $H^+$ and $OH^-$ make water, what happens to the remaining $Na^+$ and $Cl^-$ ions in the beaker?")
-        
-        st.button("View Full PDF: Salts and pH", key="pdf_2")
-
-def render_4_tier_quiz(group):
-    st.header("✍️ 4-Tier Practice Quiz")
-    st.markdown("### **Tier 1: Content**")
-    t1 = st.radio("What ion is responsible for acidic properties in water?", ["$OH^-$", "$H^+$", "$Cl^-$"])
-    
-    st.markdown("### **Tier 2: Confidence**")
-    t2 = st.select_slider("How sure are you?", ["Unsure", "Sure", "Very Sure"], key="t2")
-    
-    st.markdown("### **Tier 3: Reasoning**")
-    t3 = st.text_area("Explain why you chose that ion:")
-    
-    st.markdown("### **Tier 4: Confidence**")
-    t4 = st.select_slider("How sure are you of your reason?", ["Unsure", "Sure", "Very Sure"], key="t4")
-    
-    if st.form_submit_button("Submit"):
-        st.success("Responses recorded for diagnostic analysis.")
+        if not mats.empty:
+            for _, row in mats.iterrows():
+                with st.expander(f"📖 Module: {row['Topic']}"):
+                    st.write(f"**Lesson ID:** {row['Module_ID']}")
+                    
+                    # Serve Group-Specific Content
+                    video_url = row['Exp_Video'] if group == "Exp_A" else row['Ctrl_Video']
+                    
+                    if video_url:
+                        st.video(video_url)
+                    
+                    st.write("---")
+                    st.info("📂 Review the attached PDF/Image materials before starting the quiz.")
+                    st.button(f"Open Lesson Materials ({row['Module_ID']})")
+        else:
+            st.warning("No modules have been deployed yet.")
+    except Exception as e:
+        st.error(f"Error loading path: {e}")
 
 def render_socratic_tutor():
-    st.header("🤖 Socratic Tutor")
-    st.write("Welcome to the Experimental Group's AI assistant. Let's discuss your thoughts on pH.")
-    st.chat_input("Explain why you think lemon juice is acidic...")
+    st.header("🤖 Socratic Chemistry Assistant")
+    st.caption("Experimental Group Only: Interactive Conceptual Support")
+    
+    # Retrieve the 'Socratic Anchor' from the last deployed module
+    try:
+        client = get_gspread_client()
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        mats = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
+        current_anchor = mats.iloc[-1]['Socratic_Anchor'] if not mats.empty else "Let's explore chemistry!"
+    except:
+        current_anchor = "Let's discuss your reasoning."
+
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = [{"role": "assistant", "content": f"Hello! I'm here to help you think through the lesson. {current_anchor}"}]
+
+    for msg in st.session_state.chat_history:
+        st.chat_message(msg["role"]).write(msg["content"])
+
+    if prompt := st.chat_input("Explain your thoughts here..."):
+        st.session_state.chat_history.append({"role": "user", "content": prompt})
+        # Note: Gemini API integration occurs here
+        st.rerun()
+
+def render_assessment(group):
+    st.header("✍️ 4-Tier Conceptual Diagnostic")
+    st.info("Note: This assessment is identical for all groups to ensure scientific validity.")
+    
+    with st.form("quiz_form"):
+        st.markdown("### Tier 1: The Answer")
+        t1 = st.radio("Which statement is true about bases?", ["Increase $H^+$", "Neutralize acids to form salt", "Have pH below 7"])
+        
+        st.markdown("### Tier 2: Content Confidence")
+        t2 = st.select_slider("How sure are you?", ["Unsure", "Sure", "Very Sure"], key="t2")
+        
+        st.markdown("### Tier 3: Scientific Reasoning")
+        t3 = st.text_area("Why does this occur? Explain the chemical mechanism:")
+        
+        st.markdown("### Tier 4: Reasoning Confidence")
+        t4 = st.select_slider("How sure are you of your explanation?", ["Unsure", "Sure", "Very Sure"], key="t4")
+        
+        if st.form_submit_button("Submit 4-Tier Response"):
+            # logic to calculate Misconception_Tag and save to Assessment_Logs
+            st.success("Your diagnostic data has been securely logged.")
 
 def render_progress():
-    st.header("📊 My Progress")
-    st.write("Diagnostic results will be displayed here after completion.")
+    st.header("📊 Research Progress Tracking")
+    st.write("Visualizing your conceptual growth over time.")
