@@ -9,29 +9,53 @@ def show():
 
     tabs = st.tabs(["🚀 Deploy Lessons", "📊 Class Analytics", "🧩 Misconception Tracker", "📂 Material Audit"])
 
-    with tabs[0]: render_deploy_lessons()
-    with tabs[1]: render_class_analytics()
-    with tabs[2]: render_misconception_tracker()
-    with tabs[3]: render_audit_logs()
+    with tabs[0]:
+        render_deploy_lessons()
+
+    with tabs[1]:
+        render_class_analytics()
+
+    with tabs[2]:
+        render_misconception_tracker()
+
+    with tabs[3]:
+        render_audit_logs()
 
 def render_deploy_lessons():
-    st.subheader("Publish New Instructional Module")
-    with st.form("deployment_form"):
+    st.subheader("🚀 Dual-Path Lesson Deployment")
+    st.info("Upload different materials for each group to isolate the AI variable.")
+    
+    with st.form("advanced_deploy", clear_on_submit=True):
+        mod_id = st.text_input("Module ID (e.g., CHEM_ACID_01)", placeholder="Unique ID for this lesson")
+        topic = st.text_input("Lesson Topic", placeholder="e.g., Properties of Bases")
+        
         col1, col2 = st.columns(2)
+        
         with col1:
-            mod_name = st.text_input("Module Name", placeholder="e.g., Covalent Bonding")
-            group = st.selectbox("Assign to Group", ["Exp_A", "Control"])
+            st.markdown("### 📘 Control Group Path")
+            st.caption("Standard Digital Access (No AI)")
+            c_files = st.file_uploader("Upload PDFs/Images (Control)", accept_multiple_files=True, key="c_upload")
+            c_video = st.text_input("Video URL (Control)", placeholder="YouTube/Vimeo link")
+            
         with col2:
-            uploaded_file = st.file_uploader("Upload Lesson PDF", type="pdf")
-            mode = st.selectbox("Instructional Mode", ["AI-Scaffolded (Experimental)", "Traditional (Control)"])
+            st.markdown("### 🧪 Experimental Group Path")
+            st.caption("AI-Scaffolded (Socratic Tutor enabled)")
+            e_files = st.file_uploader("Upload PDFs/Images (Experimental)", accept_multiple_files=True, key="e_upload")
+            e_video = st.text_input("Video URL (Experimental)", placeholder="YouTube/Vimeo link")
+            
+            # THE RESEARCH ANCHOR
+            socratic_anchor = st.text_area("Socratic Pivot/Anchor", 
+                placeholder="What specific question should the AI ask to challenge the misconception?")
+
+        st.markdown("---")
+        submit = st.form_submit_button("Deploy Dual-Path Lesson")
         
-        # 🔬 RESEARCH IMPROVISATION: Target Misconception
-        target_error = st.text_input("Target Misconception", placeholder="e.g., Atoms 'want' to fill shells")
-        
-        submit = st.form_submit_button("Deploy to Student Portals")
-        if submit and mod_name and uploaded_file:
-            save_deployment(mod_name, group, mode, target_error)
-            st.success(f"Deployed {mod_name} to {group} targeting: {target_error}")
+        if submit:
+            if mod_id and topic:
+                save_dual_deployment(mod_id, topic, c_video, e_video, socratic_anchor)
+                st.success(f"Successfully deployed '{topic}' to both research paths.")
+            else:
+                st.warning("Please provide at least a Module ID and Topic.")
 
 def render_class_analytics():
     st.subheader("📊 Comparative Engagement Metrics")
@@ -41,23 +65,14 @@ def render_class_analytics():
         logs = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
         
         if not logs.empty:
-            # 🔬 RESEARCH IMPROVISATION: Comparative View
-            exp_data = logs[logs['Group'] == 'Exp_A']
-            ctrl_data = logs[logs['Group'] == 'Control']
+            c1, c2 = st.columns(2)
+            c1.metric("Total Submissions", len(logs))
+            c2.metric("Unique Students", logs['User_ID'].nunique())
             
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Exp Group Active", len(exp_data))
-            c2.metric("Control Group Active", len(ctrl_data))
-            
-            # Completion Rate Calculation
-            comp_rate = (logs['Tier_4 (Confidence_Reas)'].notna().sum() / len(logs)) * 100
-            c3.metric("Overall Completion", f"{comp_rate:.1f}%")
-
-            st.write("### Engagement: Experimental vs Control")
-            chart_data = logs.groupby(['Group', 'Module_ID']).size().unstack().fillna(0)
-            st.area_chart(chart_data)
+            st.write("### Participation: Exp_A vs Control")
+            st.bar_chart(logs['Group'].value_counts())
         else:
-            st.info("Awaiting participant data...")
+            st.info("Awaiting data from student participants...")
     except Exception as e:
         st.error(f"Analytics Error: {e}")
 
@@ -69,18 +84,12 @@ def render_misconception_tracker():
         logs = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
 
         if not logs.empty:
-            # 🔬 RESEARCH IMPROVISATION: Identifying 'Hard-to-Change' Concepts
-            st.write("### ⚠️ Resistance to Change (High Confidence Errors)")
-            # Filter: Correct Tier 1 but Wrong Tier 3 + High Confidence = False Understanding
-            resistance = logs[(logs['Diagnostic_Result'] == 'Misconception') & 
-                              (logs['Tier_4 (Confidence_Reas)'].astype(str).str.contains("High|5"))]
-            
-            if not resistance.empty:
-                st.warning(f"Critical: {len(resistance)} instances of High-Confidence Misconceptions detected.")
-                st.dataframe(resistance[['User_ID', 'Module_ID', 'Misconception_Tag', 'Group']])
-            
-            st.write("### Full Diagnostic Log")
-            st.dataframe(logs[['Timestamps', 'User_ID', 'Diagnostic_Result', 'Misconception_Tag', 'Group']])
+            st.write("### High-Confidence Misconceptions (Critical Flags)")
+            # Flagging Wrong Answer + High Confidence
+            critical = logs[(logs['Diagnostic_Result'] == 'Misconception')]
+            st.dataframe(critical[['User_ID', 'Tier_1 (Answer)', 'Tier_3 (Reason)', 'Group']])
+        else:
+            st.info("No diagnostic data available yet.")
     except Exception as e:
         st.error(f"Tracker Error: {e}")
 
@@ -90,16 +99,23 @@ def render_audit_logs():
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         mats = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
-        st.table(mats) # Using table for better audit readability
+        st.dataframe(mats, use_container_width=True)
     except:
         st.warning("No deployment records found.")
 
-def save_deployment(name, group, mode, error):
+def save_dual_deployment(mod_id, topic, c_vid, e_vid, anchor):
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         ws = sh.worksheet("Instructional_Materials")
-        # Added 'Target_Misconception' to the row
-        ws.append_row([datetime.now().strftime("%Y-%m-%d"), name, group, mode, error])
+        # Logging the deployment parameters for research verification
+        ws.append_row([
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            mod_id,
+            topic,
+            c_vid,
+            e_vid,
+            anchor
+        ])
     except Exception as e:
-        st.error(f"Deployment Error: {e}")
+        st.error(f"Deployment Save Error: {e}")
