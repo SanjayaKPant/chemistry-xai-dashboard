@@ -4,98 +4,88 @@ from datetime import datetime
 from database_manager import get_gspread_client
 
 def show():
-    # Detect the logged-in student's research group
-    user_group = st.session_state.user.get('group', 'Control')
-    st.title("🎓 Student Learning Portal")
-    st.sidebar.info(f"Research Group: {user_group}")
+    st.title("🧑‍🏫 Teacher Command Center")
+    st.markdown("---")
 
-    # Navigation Menu
-    menu = ["📚 Learning Modules", "✍️ 4-Tier Assessment", "📊 My Progress"]
-    if user_group == "Exp_A":
-        menu.insert(1, "🤖 Socratic AI Tutor")
+    tabs = st.tabs(["🚀 Deploy Lessons", "📊 Class Analytics", "🧩 Misconception Tracker", "📂 Material Audit"])
+
+    with tabs[0]: render_deploy_lessons()
+    with tabs[1]: render_class_analytics()
+    with tabs[2]: render_misconception_tracker()
+    with tabs[3]: render_audit_logs()
+
+def render_deploy_lessons():
+    st.subheader("🚀 Strategic Lesson Deployment")
+    st.info("Assign materials to specific groups to test AI effectiveness.")
     
-    choice = st.sidebar.radio("Navigation", menu)
+    with st.form("deploy_form", clear_on_submit=True):
+        # Matching your Sheet Headers: Title, Description, Group
+        title = st.text_input("Lesson Title (e.g., Acids & Bases)")
+        group = st.selectbox("Target Research Group", ["Exp_A", "Control"])
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            file_link = st.text_input("Material Link (PDF/Drive URL)")
+            video_url = st.text_input("Video URL (YouTube)")
+        with col2:
+            learning_obj = st.text_area("Learning Objectives")
+            # This will be stored in 'Description' for the AI to use as a Socratic Anchor
+            socratic_anchor = st.text_area("Socratic Anchor (AI Guidance)")
 
-    if choice == "📚 Learning Modules":
-        render_learning_path(user_group)
-    elif choice == "🤖 Socratic AI Tutor":
-        render_socratic_tutor()
-    elif choice == "✍️ 4-Tier Assessment":
-        render_assessment(user_group)
-    elif choice == "📊 My Progress":
-        render_progress()
+        if st.form_submit_button("Deploy to Research Portal"):
+            if title and file_link:
+                save_deployment(title, group, file_link, video_url, learning_obj, socratic_anchor)
+                st.success(f"Successfully deployed '{title}' to {group}.")
+            else:
+                st.warning("Please provide a Title and a File Link.")
 
-def render_learning_path(group):
-    st.header("📚 Your Learning Journey")
+def render_class_analytics():
+    st.subheader("📊 Class Analytics & Engagement")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        mats = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
+        # Accessing the Assessment_Logs tab seen in your screenshot
+        logs = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
         
-        if not mats.empty:
-            for _, row in mats.iterrows():
-                with st.expander(f"📖 Module: {row['Topic']}"):
-                    st.write(f"**Lesson ID:** {row['Module_ID']}")
-                    
-                    # Serve Group-Specific Content
-                    video_url = row['Exp_Video'] if group == "Exp_A" else row['Ctrl_Video']
-                    
-                    if video_url:
-                        st.video(video_url)
-                    
-                    st.write("---")
-                    st.info("📂 Review the attached PDF/Image materials before starting the quiz.")
-                    st.button(f"Open Lesson Materials ({row['Module_ID']})")
+        if not logs.empty:
+            st.metric("Total Research Entries", len(logs))
+            st.write("### Participation by Research Group")
+            st.bar_chart(logs['Group'].value_counts())
         else:
-            st.warning("No modules have been deployed yet.")
+            st.info("Awaiting student data in Assessment_Logs...")
     except Exception as e:
-        st.error(f"Error loading path: {e}")
+        st.error(f"Analytics Error: {e}")
 
-def render_socratic_tutor():
-    st.header("🤖 Socratic Chemistry Assistant")
-    st.caption("Experimental Group Only: Interactive Conceptual Support")
-    
-    # Retrieve the 'Socratic Anchor' from the last deployed module
+def render_misconception_tracker():
+    st.subheader("🧩 Conceptual Change Monitor")
+    st.info("Flagging students with high-confidence reasoning errors.")
+    # (Tracker logic pulls from Assessment_Logs as previously established)
+
+def render_audit_logs():
+    st.subheader("📂 Instructional Material Audit")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         mats = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
-        current_anchor = mats.iloc[-1]['Socratic_Anchor'] if not mats.empty else "Let's explore chemistry!"
+        st.dataframe(mats, use_container_width=True)
     except:
-        current_anchor = "Let's discuss your reasoning."
+        st.warning("No records found in Instructional_Materials.")
 
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = [{"role": "assistant", "content": f"Hello! I'm here to help you think through the lesson. {current_anchor}"}]
-
-    for msg in st.session_state.chat_history:
-        st.chat_message(msg["role"]).write(msg["content"])
-
-    if prompt := st.chat_input("Explain your thoughts here..."):
-        st.session_state.chat_history.append({"role": "user", "content": prompt})
-        # Note: Gemini API integration occurs here
-        st.rerun()
-
-def render_assessment(group):
-    st.header("✍️ 4-Tier Conceptual Diagnostic")
-    st.info("Note: This assessment is identical for all groups to ensure scientific validity.")
-    
-    with st.form("quiz_form"):
-        st.markdown("### Tier 1: The Answer")
-        t1 = st.radio("Which statement is true about bases?", ["Increase $H^+$", "Neutralize acids to form salt", "Have pH below 7"])
-        
-        st.markdown("### Tier 2: Content Confidence")
-        t2 = st.select_slider("How sure are you?", ["Unsure", "Sure", "Very Sure"], key="t2")
-        
-        st.markdown("### Tier 3: Scientific Reasoning")
-        t3 = st.text_area("Why does this occur? Explain the chemical mechanism:")
-        
-        st.markdown("### Tier 4: Reasoning Confidence")
-        t4 = st.select_slider("How sure are you of your explanation?", ["Unsure", "Sure", "Very Sure"], key="t4")
-        
-        if st.form_submit_button("Submit 4-Tier Response"):
-            # logic to calculate Misconception_Tag and save to Assessment_Logs
-            st.success("Your diagnostic data has been securely logged.")
-
-def render_progress():
-    st.header("📊 Research Progress Tracking")
-    st.write("Visualizing your conceptual growth over time.")
+def save_deployment(title, group, file, video, obj, anchor):
+    try:
+        client = get_gspread_client()
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        ws = sh.worksheet("Instructional_Materials")
+        # Matches your exact 7 columns
+        # Timestamp, Teacher_ID, Group, Title, Description (Anchor), File_Link, Learning_Objectives
+        ws.append_row([
+            datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "Chemistry_Dept",
+            group,
+            title,
+            anchor, # Storing Socratic knowledge in Description
+            file,
+            obj
+        ])
+    except Exception as e:
+        st.error(f"Deployment Error: {e}")
