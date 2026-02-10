@@ -5,73 +5,83 @@ from database_manager import get_gspread_client
 
 def show():
     st.title("🧑‍🏫 Teacher Command Center")
-    st.markdown("---")
-
-    tabs = st.tabs(["🚀 Deploy Lessons", "📊 Class Analytics", "🧩 Misconception Tracker", "📂 Material Audit"])
-
+    tabs = st.tabs(["🚀 Deploy Lessons", "📊 Analytics", "🧩 Tracker", "📂 Audit"])
     with tabs[0]: render_deploy_lessons()
-    with tabs[1]: render_class_analytics()
-    with tabs[2]: render_misconception_tracker()
+    with tabs[1]: st.info("Analytics coming soon...")
+    with tabs[2]: st.info("Tracker coming soon...")
     with tabs[3]: render_audit_logs()
 
 def render_deploy_lessons():
-    st.subheader("🚀 Strategic Lesson Deployment")
+    st.subheader("🚀 Hierarchical Lesson Deployment")
     
-    # Differentiation: Select the group first to morph the form
-    group_choice = st.selectbox("Select Target Research Group", ["Exp_A (Socratic AI)", "Control (Traditional)"])
-    group_id = "Exp_A" if "Exp_A" in group_choice else "Control"
+    # Global Settings
+    col_a, col_b = st.columns(2)
+    with col_a:
+        main_title = st.text_input("Main Lesson Title", placeholder="e.g., Acids, Bases, and Salts")
+    with col_b:
+        target_group = st.selectbox("Research Group", ["Exp_A", "Control"])
+    
+    learning_outcomes = st.text_area("Global Learning Outcomes (Key Takeaways)")
 
-    with st.form("deploy_form", clear_on_submit=True):
-        st.markdown(f"### 📝 Configuring Module for: **{group_id}**")
-        title = st.text_input("Lesson Title (e.g., Bronsted-Lowry Theory)")
-        file_link = st.text_input("Material Link (PDF/Drive URL)")
-        learning_obj = st.text_area("Learning Objectives")
+    st.markdown("---")
+    st.write("### 🧩 Concept Breakdown (Sub-titles)")
+    
+    if 'concept_count' not in st.session_state:
+        st.session_state.concept_count = 1
 
-        # Decision Tree Logic for Experimental Group Only
-        socratic_logic = ""
-        if group_id == "Exp_A":
-            st.markdown("---")
-            st.markdown("### 🌳 Socratic Decision Tree")
-            st.caption("Define the 'If-Then' logic for the AI to follow during chat.")
-            col1, col2 = st.columns(2)
-            with col1:
-                if_mis = st.text_input("IF Student holds this misconception:", placeholder="e.g., Acids are always liquids")
-            with col2:
-                then_ask = st.text_input("THEN AI should ask this pivot:", placeholder="e.g., What about Vitamin C (Ascorbic acid) crystals?")
-            socratic_logic = f"IF: {if_mis} | THEN: {then_ask}"
-        else:
-            st.info("ℹ️ Control Group will receive a standard digital interface without AI intervention.")
+    concepts_data = []
+    
+    # Form handles the bulk submission
+    with st.form("multi_concept_form"):
+        for i in range(st.session_state.concept_count):
+            with st.container(border=True):
+                st.markdown(f"#### 📍 Sub-Concept #{i+1}")
+                sub_title = st.text_input("Sub-title", key=f"sub_{i}", placeholder="e.g., Arrhenius Concept")
+                sub_obj = st.text_area("Learning Objectives", key=f"obj_{i}")
+                
+                # Media Section
+                m_col1, m_col2 = st.columns(2)
+                with m_col1:
+                    files = st.file_uploader("Upload Images/PDFs", accept_multiple_files=True, key=f"file_{i}")
+                with m_col2:
+                    videos = st.text_area("Video Links (One per line)", key=f"vid_{i}")
 
-        if st.form_submit_button("Deploy Research Module"):
-            if title and file_link:
-                save_deployment(title, group_id, file_link, learning_obj, socratic_logic)
-                st.success(f"Successfully deployed to {group_id}!")
-            else:
-                st.warning("Title and File Link are mandatory.")
+                # Socratic Logic
+                tree = ""
+                if target_group == "Exp_A":
+                    tree = st.text_area("Socratic Tree (IF: misconception | THEN: pivot)", key=f"tree_{i}")
+                
+                # 4-Tier Data
+                q_data = st.text_area("4-Tier Question (Raw Text)", key=f"q_{i}")
+                
+                concepts_data.append({
+                    "sub_title": sub_title, "obj": sub_obj, "logic": tree, "q": q_data, "vids": videos
+                })
 
-def save_deployment(title, group, file, obj, logic):
+        if st.form_submit_button("🚀 Deploy All Concepts"):
+            save_bulk_deployment(main_title, learning_outcomes, target_group, concepts_data)
+            st.success(f"Deployed {len(concepts_data)} concepts to {target_group}!")
+
+    if st.button("➕ Add Sub-title (Concept)"):
+        st.session_state.concept_count += 1
+        st.rerun()
+
+def save_bulk_deployment(main, outcomes, group, data_list):
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         ws = sh.worksheet("Instructional_Materials")
-        # Timestamp, Teacher_ID, Group, Title, Description (Logic), File_Link, Learning_Objectives
-        ws.append_row([datetime.now().strftime("%Y-%m-%d %H:%M"), "Admin_Teacher", group, title, logic, file, obj])
-    except Exception as e:
-        st.error(f"Save Error: {e}")
-
-def render_class_analytics():
-    st.subheader("📊 Comparative Analytics")
-    # ... (Same as previous version, pulling from Assessment_Logs)
-
-def render_misconception_tracker():
-    st.subheader("🧩 Diagnostic Tracker")
-    # ... (Same as previous version)
+        for concept in data_list:
+            ws.append_row([
+                datetime.now().strftime("%Y-%m-%d %H:%M"), "Admin_Teacher", group, 
+                main, outcomes, concept['sub_title'], concept['obj'], 
+                "Links_Pending", concept['vids'], concept['logic'], concept['q']
+            ])
+    except Exception as e: st.error(f"Error: {e}")
 
 def render_audit_logs():
-    st.subheader("📂 Audit Logs")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        mats = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
-        st.dataframe(mats)
+        st.dataframe(pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records()))
     except: st.warning("No data.")
