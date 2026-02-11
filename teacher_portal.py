@@ -1,87 +1,94 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from database_manager import get_gspread_client
+from database_manager import get_gspread_client, save_bulk_concepts
 
 def show():
     st.title("🧑‍🏫 Teacher Command Center")
-    tabs = st.tabs(["🚀 Deploy Lessons", "📊 Analytics", "🧩 Tracker", "📂 Audit"])
+    st.markdown("---")
+
+    tabs = st.tabs(["🚀 Deploy Lessons", "📊 Class Analytics", "🧩 Misconception Tracker", "📂 Material Audit"])
+
     with tabs[0]: render_deploy_lessons()
-    with tabs[1]: st.info("Analytics coming soon...")
-    with tabs[2]: st.info("Tracker coming soon...")
+    with tabs[1]: st.info("Analytics dashboard is being updated for hierarchical data...")
+    with tabs[2]: st.info("Misconception tracker is being updated for 4-tier analysis...")
     with tabs[3]: render_audit_logs()
 
 def render_deploy_lessons():
-    st.subheader("🚀 Hierarchical Lesson Deployment")
+    st.subheader("🚀 Strategic Lesson Deployment")
+    st.caption("Organize your lesson into 'Atomic Concepts' (Up to 50) for precise diagnostic tracking.")
     
-    # Global Settings
-    col_a, col_b = st.columns(2)
-    with col_a:
-        main_title = st.text_input("Main Lesson Title", placeholder="e.g., Acids, Bases, and Salts")
-    with col_b:
-        target_group = st.selectbox("Research Group", ["Exp_A", "Control"])
+    # Global Lesson Settings
+    col1, col2 = st.columns(2)
+    with col1:
+        main_title = st.text_input("Main Lesson Title", "Acid, Base, and Salt")
+    with col2:
+        group_id = st.selectbox("Target Research Group", ["Exp_A", "Control"])
     
-    learning_outcomes = st.text_area("Global Learning Outcomes (Key Takeaways)")
+    outcomes = st.text_area("Global Learning Outcomes (Big Picture Goals)")
 
     st.markdown("---")
-    st.write("### 🧩 Concept Breakdown (Sub-titles)")
     
+    # Manage sub-concept count in session state
     if 'concept_count' not in st.session_state:
         st.session_state.concept_count = 1
 
-    concepts_data = []
+    concepts_list = []
     
-    # Form handles the bulk submission
-    with st.form("multi_concept_form"):
+    with st.form("multi_concept_form", clear_on_submit=True):
         for i in range(st.session_state.concept_count):
             with st.container(border=True):
                 st.markdown(f"#### 📍 Sub-Concept #{i+1}")
-                sub_title = st.text_input("Sub-title", key=f"sub_{i}", placeholder="e.g., Arrhenius Concept")
-                sub_obj = st.text_area("Learning Objectives", key=f"obj_{i}")
+                sub_title = st.text_input("Sub-title (e.g., Arrhenius Theory)", key=f"sub_{i}")
+                obj = st.text_area("Learning Objectives (Specific)", key=f"obj_{i}")
                 
-                # Media Section
-                m_col1, m_col2 = st.columns(2)
-                with m_col1:
-                    files = st.file_uploader("Upload Images/PDFs", accept_multiple_files=True, key=f"file_{i}")
-                with m_col2:
-                    videos = st.text_area("Video Links (One per line)", key=f"vid_{i}")
-
-                # Socratic Logic
+                # Media
+                vids = st.text_area("Video Links (One URL per line)", key=f"vid_{i}")
+                
+                # Experimental Logic
                 tree = ""
-                if target_group == "Exp_A":
-                    tree = st.text_area("Socratic Tree (IF: misconception | THEN: pivot)", key=f"tree_{i}")
+                if group_id == "Exp_A":
+                    tree = st.text_area("Socratic Tree (IF: misconception | THEN: pivot)", key=f"tree_{i}", 
+                                        help="Example: IF: acids are liquids | THEN: What about solid citric acid?")
                 
-                # 4-Tier Data
-                q_data = st.text_area("4-Tier Question (Raw Text)", key=f"q_{i}")
+                # Diagnostic Data
+                q_data = st.text_area("Four-Tier Question Data", key=f"q_{i}", 
+                                      help="Type your question and options here. This will show on the student's dashboard.")
                 
-                concepts_data.append({
-                    "sub_title": sub_title, "obj": sub_obj, "logic": tree, "q": q_data, "vids": videos
+                concepts_list.append({
+                    "sub_title": sub_title,
+                    "obj": obj,
+                    "video_links": vids,
+                    "tree_logic": tree,
+                    "q_data": q_data,
+                    "file_links": "N/A" # Placeholder for drive integration
                 })
 
-        if st.form_submit_button("🚀 Deploy All Concepts"):
-            save_bulk_deployment(main_title, learning_outcomes, target_group, concepts_data)
-            st.success(f"Deployed {len(concepts_data)} concepts to {target_group}!")
+        submit = st.form_submit_button("🚀 Deploy Full Architecture to Research Database")
+        
+        if submit:
+            if not main_title or not concepts_list[0]['sub_title']:
+                st.error("Please provide at least a Main Title and one Sub-title.")
+            else:
+                success = save_bulk_concepts(main_title, outcomes, group_id, concepts_list)
+                if success:
+                    st.success(f"Successfully deployed '{main_title}' with {len(concepts_list)} concepts to {group_id}!")
+                    st.session_state.concept_count = 1 # Reset after success
+                else:
+                    st.error("Database connection failed. Please check your Sheet headers.")
 
-    if st.button("➕ Add Sub-title (Concept)"):
+    # Add Concept Button (outside the form)
+    if st.button("➕ Add Another Sub-title (Concept)"):
         st.session_state.concept_count += 1
         st.rerun()
 
-def save_bulk_deployment(main, outcomes, group, data_list):
-    try:
-        client = get_gspread_client()
-        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        ws = sh.worksheet("Instructional_Materials")
-        for concept in data_list:
-            ws.append_row([
-                datetime.now().strftime("%Y-%m-%d %H:%M"), "Admin_Teacher", group, 
-                main, outcomes, concept['sub_title'], concept['obj'], 
-                "Links_Pending", concept['vids'], concept['logic'], concept['q']
-            ])
-    except Exception as e: st.error(f"Error: {e}")
-
 def render_audit_logs():
+    st.subheader("📂 Instructional Materials Audit")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        st.dataframe(pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records()))
-    except: st.warning("No data.")
+        worksheet = sh.worksheet("Instructional_Materials")
+        data = pd.DataFrame(worksheet.get_all_records())
+        st.dataframe(data)
+    except Exception as e:
+        st.warning(f"Could not load audit logs: {e}")
