@@ -32,7 +32,6 @@ def get_drive_service():
 
 # --- CORE LOGIN LOGIC ---
 def check_login(user_id):
-    """Verifies credentials and fixes the 'Series' attribute error."""
     client = get_gspread_client()
     if not client: return None
     try:
@@ -41,10 +40,8 @@ def check_login(user_id):
         worksheet = sh.worksheet("Participants")
         data = pd.DataFrame(worksheet.get_all_records())
         
-        # Standardizing ID format to prevent login failures
         data['User_ID'] = data['User_ID'].astype(str).str.strip().str.upper()
         search_id = str(user_id).strip().upper()
-        
         user_row = data[data['User_ID'] == search_id]
         
         if not user_row.empty:
@@ -60,124 +57,71 @@ def check_login(user_id):
         st.error(f"Login Database Error: {e}")
         return None
 
-# --- SYSTEMATIC FILE UPLOAD & LOGGING ---
-def upload_and_log_material(teacher_id, group, title, mode, file_obj, desc, hint):
-    """Uploads to Shared Drive to bypass the 403 Quota Error."""
-    drive_service = get_drive_service()
-    gs_client = get_gspread_client()
-    
-    # YOUR NEW SHARED DRIVE ID
-    TARGET_DRIVE_ID = "0AJAe9AoSTt6-Uk9PVA" 
-
-    if not drive_service or not gs_client: return False
-    
+# --- HIERARCHICAL BULK DEPLOYMENT (11 COLUMNS) ---
+def save_bulk_concepts(main_title, outcomes, group, concepts_list):
+    """
+    Saves multiple sub-concepts into the 11-column format.
+    Spreadsheet Columns: 
+    1. Timestamp, 2. Teacher_ID, 3. Group, 4. Main_Title, 5. Learning_Outcomes, 
+    6. Sub_Title, 7. Learning_Objectives, 8. File_Links, 9. Video_Links, 
+    10. Socratic_Tree, 11. Four_Tier_Data
+    """
+    client = get_gspread_client()
+    if not client: return False
     try:
-        st.info("🔄 Uploading to Shared Research Drive...")
-        
-        file_metadata = {
-            'name': f"[{group}] {title}.pdf",
-            'parents': [TARGET_DRIVE_ID] 
-        }
-        
-        media = MediaIoBaseUpload(io.BytesIO(file_obj.getvalue()), mimetype='application/pdf')
-        
-        # supportsAllDrives=True is the key to using the Shared Drive's quota
-        drive_file = drive_service.files().create(
-            body=file_metadata, 
-            media_body=media, 
-            fields='id, webViewLink',
-            supportsAllDrives=True
-        ).execute()
-        
-        # Grant permissions so participants can view the material
-        drive_service.permissions().create(
-            fileId=drive_file.get('id'), 
-            body={'type': 'anyone', 'role': 'reader'},
-            supportsAllDrives=True
-        ).execute()
-        
-        file_link = drive_file.get('webViewLink')
-
-        # Log metadata to the Spreadsheet for Plan A/B analysis
-        sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60"
-        sh = gs_client.open_by_key(sheet_id)
-        worksheet = sh.worksheet("Instructional_Materials") 
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        ws = sh.worksheet("Instructional_Materials")
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        worksheet.append_row([timestamp, teacher_id, group, title, mode, file_link, desc, hint])
+        teacher_id = st.session_state.user['id']
+
+        rows_to_add = []
+        for c in concepts_list:
+            rows_to_add.append([
+                timestamp, 
+                teacher_id, 
+                group, 
+                main_title, 
+                outcomes,
+                c['sub_title'], 
+                c['obj'], 
+                c['file_links'], 
+                c['video_links'],
+                c['tree_logic'], 
+                c['q_data']
+            ])
         
+        ws.append_rows(rows_to_add)
         return True
     except Exception as e:
-        st.error(f"❌ Systematic Error: {e}")
+        st.error(f"Bulk Save Error: {e}")
         return False
 
-def log_temporal_trace(user_id, event_type, details=""):
-    """
-    Logs every student click for PhD Temporal Analysis.
-    Ensures the code supports the 'Temporal_Traces' sheet design.
-    """
-    try:
-        client = get_gspread_client()
-        # Ensure this ID matches your specific sheet
-        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        worksheet = sh.worksheet("Temporal_Traces")
-        
-        # Professional standard: Always include a timestamp for time-series analysis
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        # This list MUST match your spreadsheet columns perfectly
-        new_entry = [timestamp, user_id, event_type, details]
-        worksheet.append_row(new_entry)
-    except Exception as e:
-        print(f"Integration Error: {e}")
-
-def get_materials_by_group(group_name):
-    client = get_gspread_client()
-    if not client: return []
-    try:
-        sheet_id = "1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60"
-        sh = client.open_by_key(sheet_id)
-        worksheet = sh.worksheet("Instructional_Materials")
-        records = worksheet.get_all_records()
-        
-        if not records:
-            return []
-            
-        data = pd.DataFrame(records)
-        
-        # --- NEW: Debugging Info for the Researcher ---
-        # This will show up in your Streamlit app so you can see the mismatch
-        st.write(f"🔍 System Search: Looking for group '{group_name}'")
-        
-        if 'Group' not in data.columns:
-            st.error(f"Spreadsheet Error: Header 'Group' not found. Available: {list(data.columns)}")
-            return []
-            
-        # Standardize both to avoid Case Sensitivity issues
-        data['Group'] = data['Group'].astype(str).str.strip()
-        
-        # Professional filter: Show materials for specific group OR for 'Both'
-        filtered_data = data[(data['Group'] == group_name) | (data['Group'] == 'Both')]
-        
-        return filtered_data.to_dict('records')
-    except Exception as e:
-        st.error(f"Error fetching materials: {e}")
-        return []
-def log_student_response(user_id, module_id, t1, t2, t3, t4):
+# --- 4-TIER STUDENT RESPONSE LOGGING ---
+def log_student_response(user_id, sub_title, group, t1, t2, t3, t4):
+    """Logs detailed student diagnostics for PhD qualitative/quantitative analysis."""
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         worksheet = sh.worksheet("Assessment_Logs")
         
-        # 1. Calculate the Diagnostic Result (The 'Science' part)
-        # You will define 'correct_ans' and 'correct_reason' per module
-        status = "Analyzing..." 
-        
-        # 2. Prepare the row for the spreadsheet
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        new_row = [user_id, timestamp, t1, t2, t3, t4, status]
+        # Structure: User_ID, Timestamp, Group, Concept, T1, T2, T3, T4
+        new_row = [user_id, timestamp, group, sub_title, t1, t2, t3, t4]
         
         worksheet.append_row(new_row)
         return True
     except Exception as e:
-        st.error(f"Spreadsheet Error: {e}")
+        st.error(f"Logging Error: {e}")
         return False
+
+# --- TEMPORAL TRACE LOGGING ---
+def log_temporal_trace(user_id, event_type, details=""):
+    """Logs clicks and navigation for time-series engagement analysis."""
+    try:
+        client = get_gspread_client()
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        worksheet = sh.worksheet("Temporal_Traces")
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        worksheet.append_row([timestamp, user_id, event_type, details])
+    except Exception as e:
+        print(f"Temporal Log Error: {e}")
