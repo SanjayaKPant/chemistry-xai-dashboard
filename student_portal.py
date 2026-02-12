@@ -6,15 +6,12 @@ def show():
     user = st.session_state.user
     user_group = user.get('group', 'Control')
     
-    st.title(f"🎓 Learning Portal: {user_group} Group")
+    st.sidebar.title(f"👤 {user.get('name')}")
+    st.sidebar.info(f"Group: {user_group}")
     
-    # Navigation
-    if user_group == "Exp_A":
-        st.sidebar.warning("🛡️ AI-Enabled Mode Active")
-        menu = ["📚 Science Modules", "🤖 Socratic Tutor", "📊 My Progress"]
-    else:
-        st.sidebar.info("📘 Standard Mode Active")
-        menu = ["📚 Digital Library", "📊 My Progress"]
+    menu = ["📚 Science Modules", "🤖 Socratic Tutor", "📊 My Progress"]
+    if user_group == "Control":
+        menu = ["📚 Digital Library", "📊 My Progress"] # No AI for control
         
     choice = st.sidebar.radio("Navigation", menu)
 
@@ -26,104 +23,85 @@ def show():
         render_progress(user['id'])
 
 def render_learning_path(group):
-    st.header("📂 Available Concepts")
-    
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         df = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
-        
-        # Standardize headers
         df.columns = [c.strip().replace(' ', '_') for c in df.columns]
         my_data = df[df['Group'] == group]
 
         if not my_data.empty:
             for idx, row in my_data.iterrows():
-                # UNIQUE KEY FIX: Adding 'idx' to the key ensures no duplicates
-                with st.expander(f"🔹 CONCEPT: {row['Sub_Title']}"):
+                # FIX: Unique key using index + title
+                with st.expander(f"🔹 {row['Sub_Title']}"):
                     st.write(f"**Objective:** {row['Learning_Objectives']}")
                     
                     if row.get('Video_Links'):
-                        v_links = str(row['Video_Links']).split('\n')
-                        for link in v_links:
+                        for link in str(row['Video_Links']).split('\n'):
                             if "http" in link: st.video(link.strip())
 
                     st.markdown("---")
-                    st.subheader("✍️ 4-Tier Diagnostic Check")
-                    st.info(row.get('Four_Tier_Data', "No question data."))
+                    st.info(f"**Diagnostic Question:**\n\n{row.get('Four_Tier_Data')}")
                     
-                    # Form with unique key
-                    with st.form(key=f"quiz_form_{idx}"):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            t1 = st.radio("Tier 1: Answer", ["Option A", "Option B", "Option C"], key=f"t1_{idx}")
-                            t2 = st.select_slider("Tier 2: Confidence", ["Unsure", "Sure", "Very Sure"], key=f"t2_{idx}")
-                        with col2:
-                            t3 = st.text_area("Tier 3: Reasoning", key=f"t3_{idx}")
-                            t4 = st.select_slider("Tier 4: Reasoning Confidence", ["Unsure", "Sure", "Very Sure"], key=f"t4_{idx}")
+                    with st.form(key=f"form_v1_{idx}"):
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            t1 = st.radio("Answer Choice", ["A", "B", "C", "D"], key=f"t1_{idx}")
+                            t2 = st.select_slider("Confidence (Tier 2)", ["Unsure", "Sure", "Very Sure"], key=f"t2_{idx}")
+                        with c2:
+                            t3 = st.text_area("Justification (Tier 3)", key=f"t3_{idx}")
+                            t4 = st.select_slider("Confidence (Tier 4)", ["Unsure", "Sure", "Very Sure"], key=f"t4_{idx}")
                         
                         if st.form_submit_button("Submit Response"):
                             log_student_response(st.session_state.user['id'], row['Sub_Title'], group, t1, t2, t3, t4)
-                            log_temporal_trace(st.session_state.user['id'], "ASSESSMENT_SUBMIT", row['Sub_Title'])
-                            
-                            if group == "Exp_A":
-                                # Pass the tree logic to the tutor
-                                st.session_state.current_pivot = row.get('Socratic_Tree', "")
-                                st.success("Response logged! Navigate to 'Socratic Tutor' to discuss.")
-                            else:
-                                st.success("Response logged!")
+                            # Set the pivot for the AI tutor
+                            st.session_state.current_pivot = row.get('Socratic_Tree', "")
+                            st.session_state.current_sub = row['Sub_Title']
+                            st.success("✅ Response Saved! You can now discuss this in the Socratic Tutor tab.")
         else:
-            st.warning("No modules deployed for your group yet.")
+            st.warning("No lessons assigned to your group.")
     except Exception as e:
-        st.error(f"Error loading modules: {e}")
+        st.error(f"Error: {e}")
 
 def render_socratic_tutor():
-    st.header("🤖 Socratic Tutor")
-    # Get pivot logic from session (set when student clicks 'Submit' or a module)
-    pivot_logic = st.session_state.get('current_pivot', "")
-    
+    st.subheader("🤖 Socratic Reasoning Assistant")
+    pivot = st.session_state.get('current_pivot', "")
+    target_concept = st.session_state.get('current_sub', "General Chemistry")
+
+    if not pivot:
+        st.warning("Please complete a diagnostic check in 'Science Modules' first to start a targeted discussion.")
+        return
+
     if "messages" not in st.session_state:
-        st.session_state.messages = [{"role": "assistant", "content": "I've reviewed your response. What's your current thinking on the Arrhenius definition?"}]
+        st.session_state.messages = [{"role": "assistant", "content": f"I've analyzed your thoughts on {target_concept}. How did you arrive at that conclusion?"}]
 
     for m in st.session_state.messages:
-        st.chat_message(m["role"]).write(m["content"])
+        with st.chat_message(m["role"]):
+            st.write(m["content"])
 
-    if prompt := st.chat_input("Explain your reasoning..."):
+    if prompt := st.chat_input("Type your explanation..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         
-        # --- SOCRATIC LOGIC ENGINE ---
-        response = "That's an interesting point. Can you explain how that relates to the ions released in water?"
+        # Socratic Logic Engine
+        bot_res = "Can you elaborate on the chemical process occurring there?"
+        if "|" in pivot:
+            trigger, pivot_q = pivot.split("|")[0].lower(), pivot.split("|")[1]
+            if any(word in prompt.lower() for word in trigger.replace("if:", "").strip().split()):
+                bot_res = pivot_q.replace("THEN:", "").strip()
         
-        if "|" in pivot_logic:
-            try:
-                # Format: IF: misconception | THEN: pivot_question
-                parts = pivot_logic.split("|")
-                if_part = parts[0].replace("IF:", "").strip().lower()
-                then_part = parts[1].replace("THEN:", "").strip()
-                
-                if if_part in prompt.lower():
-                    response = then_part
-            except:
-                pass 
-
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        st.session_state.messages.append({"role": "assistant", "content": bot_res})
         st.rerun()
 
-def render_progress(user_id):
-    st.header("📊 My Progress")
+def render_progress(uid):
+    st.subheader("📈 Your Research Journey")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
-        
-        # Filter for current user
-        user_data = df[df['User_ID'] == user_id]
-        
-        if not user_data.empty:
-            st.write(f"You have completed **{len(user_data)}** diagnostic checks.")
-            # Simple summary table
-            st.table(user_data[['Timestamp', 't1', 't3']])
+        user_df = df[df['User_ID'] == uid]
+        if not user_df.empty:
+            st.dataframe(user_df[['Timestamp', 'sub_title', 't1', 't3']], use_container_width=True)
         else:
-            st.info("No assessment data found yet. Complete a module to see your progress!")
+            st.info("Complete your first assessment to see data here!")
     except:
-        st.error("Could not load progress data.")
+        st.error("Progress log unreachable.")
