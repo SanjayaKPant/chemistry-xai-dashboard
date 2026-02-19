@@ -19,7 +19,7 @@ def get_creds():
             
         creds_info = dict(st.secrets["gcp_service_account"])
         
-        # This line handles the \n conversion if you didn't use triple quotes
+        # This line handles key cleaning to prevent "MalformedFraming" errors
         if "private_key" in creds_info:
             creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
             
@@ -54,7 +54,7 @@ def check_login(user_id):
         st.error(f"Login Error: {e}")
         return None
 
-# --- TEACHER PORTAL FUNCTIONS (FIXES IMPORT ERROR) ---
+# --- TEACHER PORTAL FUNCTIONS (FIXES THE IMPORT ERROR) ---
 def save_bulk_concepts(concept_list):
     """Saves multiple chemistry modules from the teacher portal."""
     try:
