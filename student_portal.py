@@ -98,9 +98,9 @@ try:
     if "GEMINI_API_KEY" in st.secrets:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
         model = genai.GenerativeModel(
-            model_name='gemini-1.5-flash',
-            system_instruction=SOCRATIC_PROMPT
-        )
+    model_name='models/gemini-1.5-flash', # Fixed string
+    system_instruction=SOCRATIC_PROMPT
+)
     else:
         st.error("Gemini API Key missing in Secrets.")
 except Exception as e:
