@@ -1,6 +1,7 @@
 import streamlit as st
 import database_manager as db
 
+# Page Config must be the first Streamlit command
 st.set_page_config(page_title="Chemistry AI-X Dashboard", layout="wide")
 
 import student_portal
@@ -14,6 +15,7 @@ if st.session_state.user is None:
     st.title("🧪 Chemistry Research & Learning Portal")
     col1, col2 = st.columns(2)
     with col1:
+        # Normalize ID to uppercase to match database
         user_id = st.text_input("Enter ID (e.g., S101, T101)").strip().upper()
     
     if st.button("Login"):
@@ -24,16 +26,20 @@ if st.session_state.user is None:
         else:
             st.error("ID not found. Please check your Participants sheet.")
 else:
+    # Sidebar logout and info
+    st.sidebar.title("Navigation")
     if st.sidebar.button("Log Out"):
         st.session_state.user = None
-        st.session_state.clear() # Clear chat history on logout
+        st.session_state.clear()
         st.rerun()
 
-    # Routing based on the 'Role' column in your sheet 
-    role = st.session_state.user.get('role', 'Student')
-    if role == "Student":
-        student_portal.show()
-    elif role == "Teacher":
+    # --- THE CRITICAL FIX: CASE SENSITIVE ROUTING ---
+    # We check both 'Role' and 'role' to be safe
+    role = st.session_state.user.get('Role', st.session_state.user.get('role', 'Student'))
+    
+    if role in ["Teacher", "Head Teacher", "Science Teacher"]:
         teacher_portal.show()
     elif role == "Researcher":
-        researcher_portal.show() 
+        researcher_portal.show()
+    else:
+        student_portal.show()
