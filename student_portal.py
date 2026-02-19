@@ -3,70 +3,77 @@ import pandas as pd
 import google.generativeai as genai
 from database_manager import get_gspread_client, log_student_response, log_temporal_trace
 
-# --- ADVANCED SOCRATIC SYSTEM PROMPT (For High-Impact Research) ---
+# --- RESEARCH-GRADE SOCRATIC SYSTEM PROMPT ---
 SOCRATIC_PROMPT = """
-You are a Socratic Chemistry Tutor designed for PhD-level educational research. 
-Your goal is to guide students toward conceptual clarity without ever giving the direct answer.
+You are a Socratic Chemistry Tutor designed for Grade 10 students in Nepal. 
+Your goal is to guide students toward conceptual clarity using the National Curriculum standards.
 
 SCIENTIFIC APPROACH:
-1. Identify Misconceptions: If a student provides a wrong explanation, do not say "You are wrong." Instead, ask a question that highlights the logical inconsistency (e.g., "If the pressure increases, what must happen to the volume according to Boyle’s Law?").
-2. Sub-Microscopic Focus: Ground your questions in molecular behavior, ions, and energy changes.
-3. Scaffolding: Provide hints in the form of thought experiments.
+1. Ground questions in molecular behavior, periodic trends (Modern Periodic Law), and sub-shell electronic configuration (Aufbau's Principle)[cite: 31, 69].
+2. Address specific textbook concepts: Metals/Non-metals, Alkali/Alkaline Earth metals, and Halogens[cite: 46, 81].
+3. Scaffolding: Use the 'Socratic_Tress' guidance from the teacher to identify specific logical hurdles.
 
 ETHICAL GUIDELINES:
-1. Academic Integrity: Never solve equations for the student.
-2. Encouragement: Acknowledge the complexity of Chemistry to reduce student anxiety.
+- Never provide the final answer or chemical formulas directly.
+- Use encouraging language to reduce 'Science Anxiety' in young researchers.
 """
 
 def show():
-    # Defensive check to prevent KeyError if session state isn't fully loaded
     if 'user' not in st.session_state:
-        st.error("Please log in again.")
+        st.error("Please log in again to continue your session.")
         return
 
     user = st.session_state.user
-    user_group = user.get('Group', 'Control') # Match the column name in your Sheet
+    # Matching Sheet header: 'Group'
+    user_group = user.get('Group', 'Control')
+    user_role = user.get('Role', 'Student')
     
-    # sidebar info
     st.sidebar.title(f"👤 {user.get('Name', 'Researcher')}")
-    st.sidebar.info(f"Group: {user_group}")
+    st.sidebar.info(f"Group: {user_group} | Role: {user_role}")
     
+    # Navigation logic for PhD experimental vs control groups
     menu = ["📚 Science Modules", "🤖 Socratic Tutor", "📊 My Progress"]
     if user_group == "Control":
         menu = ["📚 Digital Library", "📊 My Progress"]
         
-    choice = st.sidebar.radio("Navigation", menu)
+    choice = st.sidebar.radio("Research Navigation", menu)
 
     if choice in ["📚 Science Modules", "📚 Digital Library"]:
-        render_learning_path(user_group)
+        render_learning_path(user_group, user_role)
     elif choice == "🤖 Socratic Tutor":
         render_socratic_tutor()
     elif choice == "📊 My Progress":
-        # Fixed the 'id' key to match Google Sheet header 'User_ID'
+        # Fixed 'User_ID' mapping for logs
         render_progress(user.get('User_ID'))
 
-def render_learning_path(group):
+def render_learning_path(group, role):
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         df = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
         
-        # Filtering by the group assigned in the Teacher Portal
-        my_data = df[df['Group'] == group]
+        # Data Cleaning for robust mapping
+        df.columns = [c.strip().replace(' ', '_') for c in df.columns]
+
+        # RESEARCH ACCESS: Teachers see all content for validation; Students only their group
+        if role in ['Teacher', 'Head Teacher', 'Science Teacher']:
+            my_data = df
+        else:
+            my_data = df[df['Group'] == group]
 
         if not my_data.empty:
             for idx, row in my_data.iterrows():
-                with st.expander(f"🔹 {row.get('Sub_Title', 'Unnamed Module')}"):
-                    st.write(f"**Objective:** {row.get('Learning_Objectives', 'N/A')}")
+                with st.expander(f"🔹 {row.get('Sub-Title', 'Unnamed Module')}"):
+                    st.write(f"**Objectives:** {row.get('Learning_Objectives', 'N/A')}")
                     
                     if row.get('Video_Links'):
                         for link in str(row['Video_Links']).split('\n'):
                             if "http" in link: st.video(link.strip())
 
                     st.markdown("---")
-                    st.info(f"**Diagnostic Question:**\n\n{row.get('Four_Tier_Data', 'No question data.')}")
+                    st.info(f"**Diagnostic Question:**\n\n{row.get('Four_Tier_Data', 'Assessment pending.')}")
                     
-                    with st.form(key=f"form_v1_{idx}"):
+                    with st.form(key=f"chem_form_{idx}"):
                         c1, c2 = st.columns(2)
                         with c1:
                             t1 = st.radio("Answer Choice", ["A", "B", "C", "D"], key=f"t1_{idx}")
@@ -77,61 +84,48 @@ def render_learning_path(group):
                         
                         if st.form_submit_button("Submit Response"):
                             user_id = st.session_state.user.get('User_ID')
-                            log_student_response(user_id, row['Sub_Title'], group, t1, t2, t3, t4)
+                            log_student_response(user_id, row['Sub-Title'], group, t1, t2, t3, t4)
                             
-                            # State management for AI
-                            st.session_state.current_pivot = row.get('Socratic_Tree', "Ask about molecular collisions.")
-                            st.session_state.current_sub = row['Sub_Title']
+                            # Save state for the AI Session
+                            st.session_state.current_pivot = row.get('Socratic_Tress', "Explore chemical principles.")
+                            st.session_state.current_sub = row['Sub-Title']
                             st.session_state.last_justification = t3
-                            
-                            if "messages" in st.session_state:
-                                del st.session_state.messages
-                                
-                            st.success("✅ Saved! Go to 'Socratic Tutor' to discuss your answer.")
+                            st.success("✅ Saved! Proceed to 'Socratic Tutor' to refine your understanding.")
         else:
-            st.warning("No lessons assigned to your group.")
+            st.warning("No curriculum modules are currently assigned to your group.")
     except Exception as e:
-        st.error(f"Database Error: {e}")
+        st.error(f"Module Load Error: {e}")
 
-# --- AI CONFIGURATION ---
+# --- AI CORE CONFIGURATION ---
 try:
     if "GEMINI_API_KEY" in st.secrets:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        model = genai.GenerativeModel(model_name='gemini-1.5-flash-latest', ...), 
-# Fixed string
-    system_instruction=SOCRATIC_PROMPT
-)
+        # Fix: Using stable model name 'gemini-1.5-flash-latest' to prevent 404 errors
+        model = genai.GenerativeModel(
+            model_name='gemini-1.5-flash-latest',
+            system_instruction=SOCRATIC_PROMPT
+        )
     else:
-        st.error("Gemini API Key missing in Secrets.")
+        st.error("API Error: GEMINI_API_KEY not found in Streamlit Secrets.")
 except Exception as e:
-    st.error(f"AI Setup Error: {e}")
+    st.error(f"AI Engine Error: {e}")
 
 def render_socratic_tutor():
     st.subheader("🤖 Socratic Reasoning Assistant")
 
     if 'last_justification' not in st.session_state:
-        st.info("Please complete a Diagnostic Question in 'Science Modules' first.")
+        st.info("💡 Please complete a 'Science Module' first to begin a tutoring session.")
         return
 
     concept = st.session_state.get('current_sub', "Chemistry")
-    
-    # 1. PULLING THE SCIENTIFIC MAP: 
-    # This pulls the specific 'Socratic_Tree' guidance from your Google Sheet
-    pivot_logic = st.session_state.get('current_pivot', "Guide the student through basic chemical principles.")
-    justification = st.session_state.get('last_justification', "")
+    pivot_instruction = st.session_state.get('current_pivot', "Standard scaffolding")
+    student_thought = st.session_state.get('last_justification', "")
 
-    if st.button("🗑️ Clear Chat"):
-        if "messages" in st.session_state:
-            del st.session_state.messages
-            st.rerun()
-
-    # 2. INITIALIZING THE SCIENTIFIC INQUIRY:
     if "messages" not in st.session_state:
         st.session_state.messages = []
         st.session_state.messages.append({
             "role": "assistant", 
-            "content": f"I've analyzed your thoughts on **{concept}**. You mentioned: *'{justification}'*. "
-                       "Thinking about the sub-microscopic level, what evidence supports that thought?"
+            "content": f"I see your thoughts on **{concept}**: *'{student_thought}'*. Based on atomic principles, why do you believe this occurs?"
         })
 
     for m in st.session_state.messages:
@@ -143,43 +137,39 @@ def render_socratic_tutor():
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # 3. THE RESEARCH-BACKED PROMPT:
-        # We now tell the AI to use the pivot_logic (Socratic Tree) as its primary instruction.
-        context_prompt = (
-            f"PEDAGOGICAL INSTRUCTION: {pivot_logic}. "
-            f"STUDENT CONTEXT: The student just said: '{prompt}'. "
-            f"ACTION: Use the Socratic method to lead them toward the correct chemical concept."
+        # The 'Hidden' Research Prompt
+        research_context = (
+            f"Curriculum Focus: {concept}. Teacher's Scaffolding Logic: {pivot_instruction}. "
+            f"Student said: {prompt}. Apply Socratic Method."
         )
 
         try:
-            # Multi-turn chat
             chat = model.start_chat(history=[
                 {"role": m["role"], "parts": [m["content"]]} for m in st.session_state.messages[:-1]
             ])
-            response = chat.send_message(context_prompt)
+            response = chat.send_message(research_context)
             
             with st.chat_message("assistant"):
                 st.markdown(response.text)
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
             
-            # 4. DATA COLLECTION FOR PhD:
-            # We log that the chat happened for time-series analysis
-            log_temporal_trace(st.session_state.user.get('User_ID'), "AI_CHAT", f"Topic: {concept}")
+            # Critical for PhD Analysis: Logging temporal engagement
+            log_temporal_trace(st.session_state.user.get('User_ID'), "AI_CHAT_INTERACTION", f"Concept: {concept}")
             
         except Exception as e:
-            st.error(f"AI Connection Error: {e}")
+            st.error(f"Tutoring Connection Error: {e}")
 
 def render_progress(uid):
-    st.subheader("📈 Your Research Journey")
+    st.subheader("📊 Your Research Progress")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
-        # Filter by the correct column 'User_ID'
+        # Clean UID filtering
         user_df = df[df['User_ID'] == uid]
         if not user_df.empty:
             st.dataframe(user_df, use_container_width=True)
         else:
-            st.info("No logs found for your ID yet.")
+            st.info("Begin your modules to see your progress logs here.")
     except Exception as e:
-        st.error(f"Progress log error: {e}")
+        st.error(f"Data Fetching Error: {e}")
