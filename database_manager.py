@@ -3,6 +3,8 @@ import gspread
 import pandas as pd
 from google.oauth2.service_account import Credentials
 from datetime import datetime
+from googleapiclient.http import MediaIoBaseUpload
+import io
 
 # --- GOOGLE CLIENTS & AUTH ---
 def get_creds():
@@ -90,3 +92,39 @@ def log_temporal_trace(user_id, event_type, details=""):
         worksheet.append_row([user_id, timestamp, event_type, details])
     except Exception as e:
         pass # Silent fail for traces to avoid interrupting user flow
+
+
+def upload_to_drive(uploaded_file, folder_id="YOUR_DRIVE_FOLDER_ID"):
+    """Uploads a file to Google Drive and returns the shareable link."""
+    try:
+        creds = get_creds()
+        service = build('drive', 'v3', credentials=creds)
+        
+        file_metadata = {
+            'name': uploaded_file.name,
+            'parents': [folder_id]
+        }
+        
+        # Determine MIME type
+        media = MediaIoBaseUpload(
+            io.BytesIO(uploaded_file.getvalue()), 
+            mimetype=uploaded_file.type, 
+            resumable=True
+        )
+        
+        file = service.files().create(
+            body=file_metadata, 
+            media_body=media, 
+            fields='id, webViewLink'
+        ).execute()
+        
+        # Set permissions to 'anyone with link can view' for the research app
+        service.permissions().create(
+            fileId=file.get('id'),
+            body={'type': 'anyone', 'role': 'reader'}
+        ).execute()
+        
+        return file.get('webViewLink')
+    except Exception as e:
+        st.error(f"Drive Upload Error: {e}")
+        return None
