@@ -114,7 +114,10 @@ def render_socratic_tutor():
         return
 
     concept = st.session_state.get('current_sub', "Chemistry")
-    pivot_logic = st.session_state.get('current_pivot', "Standard scaffolding")
+    
+    # 1. PULLING THE SCIENTIFIC MAP: 
+    # This pulls the specific 'Socratic_Tree' guidance from your Google Sheet
+    pivot_logic = st.session_state.get('current_pivot', "Guide the student through basic chemical principles.")
     justification = st.session_state.get('last_justification', "")
 
     if st.button("🗑️ Clear Chat"):
@@ -122,6 +125,7 @@ def render_socratic_tutor():
             del st.session_state.messages
             st.rerun()
 
+    # 2. INITIALIZING THE SCIENTIFIC INQUIRY:
     if "messages" not in st.session_state:
         st.session_state.messages = []
         st.session_state.messages.append({
@@ -139,12 +143,16 @@ def render_socratic_tutor():
         with st.chat_message("user"):
             st.markdown(prompt)
 
+        # 3. THE RESEARCH-BACKED PROMPT:
+        # We now tell the AI to use the pivot_logic (Socratic Tree) as its primary instruction.
         context_prompt = (
-            f"Subject: {concept}. Teacher's Pivot: {pivot_logic}. "
-            f"Student said: {prompt}. Guide them Socratically."
+            f"PEDAGOGICAL INSTRUCTION: {pivot_logic}. "
+            f"STUDENT CONTEXT: The student just said: '{prompt}'. "
+            f"ACTION: Use the Socratic method to lead them toward the correct chemical concept."
         )
 
         try:
+            # Multi-turn chat
             chat = model.start_chat(history=[
                 {"role": m["role"], "parts": [m["content"]]} for m in st.session_state.messages[:-1]
             ])
@@ -154,6 +162,8 @@ def render_socratic_tutor():
                 st.markdown(response.text)
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
             
+            # 4. DATA COLLECTION FOR PhD:
+            # We log that the chat happened for time-series analysis
             log_temporal_trace(st.session_state.user.get('User_ID'), "AI_CHAT", f"Topic: {concept}")
             
         except Exception as e:
