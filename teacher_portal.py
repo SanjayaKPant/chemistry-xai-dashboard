@@ -21,40 +21,42 @@ def show():
     with tabs[3]: render_participant_management()
 
 def render_module_architect():
-    st.subheader("🚀 Strategic Lesson Deployment")
-    st.info("Upload instructional materials (PDF/Video) and design Socratic logic here.")
+    st.subheader("🚀 Multimodal Research Architect")
     
-    with st.form("research_deployment_form"):
+    with st.form("research_deployment_form", clear_on_submit=False):
         col1, col2 = st.columns(2)
         with col1:
-            main_title = st.selectbox("Textbook Chapter", ["Classification of Elements", "Chemical Reaction", "Metals", "Hydrocarbons"])
-            group_id = st.selectbox("Target Group", ["Exp_A", "Exp_B", "Control"])
+            main_title = st.selectbox("Textbook Chapter", ["Classification of Elements", "Chemical Reaction", "Metals"])
+            group_id = st.selectbox("Target Group", ["Exp_A", "Control"])
         with col2:
-            sub_title = st.text_input("Atomic Concept (e.g., Periodic Law)")
-            learning_outcomes = st.text_area("Learning Objectives (from Textbook)")
+            sub_title = st.text_input("Atomic Concept (e.g., Noble Gases)")
+            learning_outcomes = st.text_area("Learning Objectives")
 
         st.markdown("---")
-        st.markdown("🖼️ **Multimodal Asset Library**")
-        col_a, col_b = st.columns(2)
-        with col_a:
-            asset_url = st.text_input("Textbook Image/PDF Link (Google Drive)")
-        with col_b:
-            vid_url = st.text_input("Instructional Video Link")
+        st.markdown("📤 **Direct Asset Upload (PDF, Video, or Image)**")
+        # Direct file uploaders
+        up_file = st.file_uploader("Upload Textbook Page or Diagram", type=['pdf', 'png', 'jpg'])
+        up_vid = st.file_uploader("Upload Instructional Video", type=['mp4', 'mov'])
 
-        st.markdown("🧠 **Socratic Tree Architect**")
-        tree_logic = st.text_area("AI Scaffolding Logic", 
-                                 placeholder="If student confuses atomic mass with atomic number, ask about Moseley's experiment...")
+        st.markdown("🧠 **Socratic Logic**")
+        tree_logic = st.text_area("Socratic Scaffolding Logic")
         
-        if st.form_submit_button("Deploy Core Module"):
-            # Prepare data for Google Sheets
-            concepts_list = [{
-                "sub_title": sub_title,
-                "video_links": vid_url,
-                "tree_logic": tree_logic,
-                "asset_url": asset_url
-            }]
-            success = save_bulk_concepts(main_title, learning_outcomes, group_id, concepts_list)
-            if success: st.success(f"Module '{sub_title}' deployed successfully!")
+        if st.form_submit_button("Deploy to Research Sheet"):
+            with st.spinner("Uploading assets to Google Drive..."):
+                # 1. Upload assets and get links
+                final_asset_link = upload_to_drive(up_file) if up_file else ""
+                final_vid_link = upload_to_drive(up_vid) if up_vid else ""
+                
+                # 2. Save everything to the Sheet
+                concepts_list = [{
+                    "sub_title": sub_title,
+                    "video_links": final_vid_link,
+                    "tree_logic": tree_logic,
+                    "asset_url": final_asset_link
+                }]
+                
+                if save_bulk_concepts(main_title, learning_outcomes, group_id, concepts_list):
+                    st.success("✅ Module deployed with live assets!")
 
 def render_bulk_importer():
     st.subheader("📤 Bulk Question Importer")
