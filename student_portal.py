@@ -97,8 +97,8 @@ def render_learning_path(group):
 try:
     if "GEMINI_API_KEY" in st.secrets:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        model = genai.GenerativeModel(
-    model_name='models/gemini-1.5-flash', # Fixed string
+        model = genai.GenerativeModel(model_name='gemini-1.5-flash-latest', ...), 
+# Fixed string
     system_instruction=SOCRATIC_PROMPT
 )
     else:
