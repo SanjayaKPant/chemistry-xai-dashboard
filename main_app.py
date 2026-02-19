@@ -29,7 +29,7 @@ else:
         st.session_state.clear() # Clear chat history on logout
         st.rerun()
 
-    # Routing based on the 'Role' column in your sheet
+    # Routing based on the 'Role' column in your sheet 
     role = st.session_state.user.get('role', 'Student')
     if role == "Student":
         student_portal.show()
