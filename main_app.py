@@ -36,4 +36,4 @@ else:
     elif role == "Teacher":
         teacher_portal.show()
     elif role == "Researcher":
-        researcher_portal.show()
+        researcher_portal.show() 
