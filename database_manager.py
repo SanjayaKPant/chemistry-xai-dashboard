@@ -45,7 +45,7 @@ def check_login(user_id):
 
 # --- RESEARCH DATA DEPLOYMENT ---
 def save_bulk_concepts(main_title, outcomes, group, concept_list):
-    """Saves multimodal research modules to Google Sheets."""
+    """Saves instructional materials accessible by both School A and School B."""
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
@@ -53,11 +53,11 @@ def save_bulk_concepts(main_title, outcomes, group, concept_list):
         
         rows_to_add = []
         for c in concept_list:
-            # Matches the columns: Main_Title, Learning_Objectives, Group, Sub-Title, Video_Links, Socratic_Tress, Asset_URL
+            # Columns: Main_Title, Learning_Objectives, Group, Sub-Title, Video_Links, Socratic_Tress, Asset_URL
             rows_to_add.append([
                 main_title, 
                 outcomes, 
-                group, 
+                group, # This will be "School A" or "School B"
                 c['sub_title'], 
                 c.get('video_links', ""), 
                 c.get('tree_logic', ""), 
@@ -66,7 +66,7 @@ def save_bulk_concepts(main_title, outcomes, group, concept_list):
         ws.append_rows(rows_to_add)
         return True
     except Exception as e:
-        st.error(f"Bulk Save Error: {e}")
+        st.error(f"Database Save Error: {e}")
         return False
 
 # --- LOGGING FUNCTIONS ---
