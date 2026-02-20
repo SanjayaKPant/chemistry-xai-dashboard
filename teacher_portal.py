@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from database_manager import get_gspread_client, save_bulk_concepts
+# Add upload_to_drive to your imports here:
+from database_manager import get_gspread_client, save_bulk_concepts, upload_to_drive
 
 def show():
     st.title("🧪 Research Orchestration Dashboard")
