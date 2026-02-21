@@ -20,110 +20,83 @@ ETHICAL GUIDELINES:
 """
 
 def show():
-    if 'user' not in st.session_state: return
     user = st.session_state.user
     user_school = str(user.get('Group', 'School B')).strip()
     
-    # Navigation Sidebar
-    st.sidebar.markdown(f"### 🎓 Student Portal\n**{user.get('Name')}**")
-    st.sidebar.caption(f"🏫 {user_school} | ID: {user.get('User_ID')}")
+    st.sidebar.markdown(f"## 🎓 {user.get('Name')}")
+    st.sidebar.info(f"Group: {user_school}")
     
-    menu = ["🏠 Dashboard", "📚 Learning Modules", "📝 Assignments", "🤖 Socratic Tutor", "📈 My Progress"]
-    choice = st.sidebar.radio("Main Menu", menu)
+    menu = ["🏠 Dashboard", "📚 Learning Path", "📊 My Progress", "📝 Assignments"]
+    choice = st.sidebar.radio("Navigation", menu)
 
     if choice == "🏠 Dashboard":
-        render_dashboard(user)
-    elif choice == "📚 Learning Modules":
+        st.title("Chemistry Hub Dashboard")
+        st.subheader("🏁 Learning Progress Indicator")
+        # Logic: Compare Assessment_Logs with Instructional_Materials count
+        st.progress(0.4) # Placeholder for 40%
+        st.caption("Keep going! You are almost halfway through this unit.")
+        
+    elif choice == "📚 Learning Path":
         render_learning_path(user_school)
-    elif choice == "📝 Assignments":
-        render_assignments(user_school)
-    elif choice == "🤖 Socratic Tutor":
-        render_socratic_tutor()
-    elif choice == "📈 My Progress":
-        render_visual_progress(user.get('User_ID'))
+        
+    elif choice == "📊 My Progress":
+        render_progress_chart(user.get('User_ID'))
 
-def render_dashboard(user):
-    st.title(f"Welcome to your Chemistry Hub, {user.get('Name')}! 🧪")
-    st.markdown("---")
-    c1, c2, c3 = st.columns(3)
-    with c1: st.metric("Completed Modules", "0") # Replace with dynamic count
-    with c2: st.metric("Current Confidence", "N/A")
-    with c3: st.metric("Pending Tasks", "2")
+    elif choice == "📝 Assignments":
+        st.header("📝 Assigned Tasks")
+        st.write("- [ ] Modern Periodic Table Quiz (Feb 25)")
+        st.write("- [ ] Sub-shell configuration exercise (Feb 28)")
 
 def render_learning_path(school):
-    st.subheader("📚 Digital Learning Library")
+    st.header("📚 Digital Lessons")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        ws = sh.worksheet("Instructional_Materials")
-        data = ws.get_all_values()
-        
-        if len(data) < 2:
-            st.info("No lessons have been deployed yet.")
-            return
-
+        data = sh.worksheet("Instructional_Materials").get_all_values()
         df = pd.DataFrame(data[1:], columns=data[0])
-        # Filter for student group
-        my_data = df[df['Group'].str.strip().str.upper() == school.upper()]
+        
+        # Standardize headers to handle Group vs GROUP
+        df.columns = [c.strip().upper() for c in df.columns]
+        my_lessons = df[df['GROUP'].str.strip().str.upper() == school.upper()]
 
-        for idx, row in my_data.iterrows():
-            with st.expander(f"🔹 {row['Sub_Title']}", expanded=True):
-                # 1. Objectives
-                st.info(f"🎯 **Objectives:** {row['Learning_Objectives']}")
+        for _, row in my_lessons.iterrows():
+            with st.expander(f"📖 {row['SUB_TITLE']}", expanded=True):
+                st.info(f"🎯 **Objective:** {row['LEARNING_OBJECTIVES']}")
                 
-                # 2. Attachments & Resources (TOP PART)
-                st.markdown("#### 📥 Lesson Resources")
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    if row['File_Links']: st.link_button("📄 Open Textbook PDF", row['File_Links'], use_container_width=True)
-                with col_b:
-                    if row['Video_Links']: st.link_button("🎥 Watch Video Lesson", row['Video_Links'], use_container_width=True)
+                # RESOURCES AT THE TOP
+                col1, col2 = st.columns(2)
+                with col1:
+                    if row['FILE_LINKS']: st.link_button("📄 Open PDF Context", row['FILE_LINKS'], use_container_width=True)
+                with col2:
+                    if row['VIDEO_LINKS']: st.link_button("🎥 Watch Lesson", row['VIDEO_LINKS'], use_container_width=True)
                 
                 st.markdown("---")
+                st.subheader("🧪 4-Tier Diagnostic Assessment")
+                st.write(row['DIAGNOSTIC_QUESTION'])
                 
-                # 3. 4-Tier Assessment
-                st.markdown(f"#### ❓ Diagnostic Question")
-                st.write(row['Diagnostic_Question'])
-                with st.form(key=f"diag_form_{idx}"):
-                    t1 = st.radio("Tier 1: Select correct option", [row['Option_A'], row['Option_B'], row['Option_C'], row['Option_D']])
-                    t2 = st.select_slider("Tier 2: Confidence in Answer", ["Unsure", "Sure", "Very Sure"])
-                    t3 = st.text_area("Tier 3: Reasoning (Scientific Justification)", placeholder="Explain why you chose this...")
-                    t4 = st.select_slider("Tier 4: Confidence in Reasoning", ["Unsure", "Sure", "Very Sure"])
+                with st.form(key=f"form_{row['SUB_TITLE']}"):
+                    t1 = st.radio("Select Answer", [row['OPTION_A'], row['OPTION_B'], row['OPTION_C'], row['OPTION_D']])
+                    t2 = st.select_slider("Confidence in Answer", ["Unsure", "Sure", "Very Sure"])
+                    t3 = st.text_area("Provide your Reasoning")
+                    t4 = st.select_slider("Confidence in Reasoning", ["Unsure", "Sure", "Very Sure"])
                     
-                    if st.form_submit_button("Submit & Start AI Tutoring"):
-                        log_assessment(st.session_state.user['User_ID'], school, row['Sub_Title'], t1, t2, t3, t4, "Logged", "N/A")
-                        st.session_state.last_justification = t3
-                        st.session_state.current_sub = row['Sub_Title']
-                        st.success("Success! Now open the '🤖 Socratic Tutor' tab to discuss.")
-
+                    if st.form_submit_button("Submit Assessment"):
+                        log_assessment(st.session_state.user['User_ID'], school, row['SUB_TITLE'], t1, t2, t3, t4, "Logged", "N/A")
+                        st.success("Responses recorded! Check your progress tab.")
     except Exception as e:
-        st.error(f"Error loading modules: {e}")
+        st.error(f"Error: {e}")
 
-def render_visual_progress(uid):
-    st.subheader("📈 Your Personal Learning Progress")
+def render_progress_chart(uid):
+    st.header("📈 My Confidence Growth")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        df_logs = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
-        user_logs = df_logs[df_logs['User_ID'].astype(str) == str(uid)]
-        
+        logs = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
+        user_logs = logs[logs['User_ID'].astype(str) == str(uid)]
         if not user_logs.empty:
-            # Indicator Line (Confidence Tracker)
-            fig = px.line(user_logs, x="Timestamp", y="Tier_2", title="Confidence Progression", markers=True)
+            fig = px.line(user_logs, x="Timestamp", y="Tier_2", title="Confidence Level Progression", markers=True)
             st.plotly_chart(fig, use_container_width=True)
-            
-            # Module Mastery Bar
-            mastery = user_logs['Module_ID'].value_counts().reset_index()
-            fig_bar = px.bar(mastery, x='Module_ID', y='count', title="Activity per Topic")
-            st.plotly_chart(fig_bar, use_container_width=True)
         else:
-            st.info("Complete an assessment to see your progress graph!")
+            st.info("Complete a lesson to see your progress data.")
     except:
-        st.error("Progress data sheet not found.")
-
-def render_assignments(school):
-    st.subheader("📝 Assignment List")
-    st.info("The assignments below are assigned to your group.")
-    # Placeholder for assignment logic
-    st.write("1. 🧪 Modern Periodic Law Worksheet - **Due Friday**")
-    st.write("2. 📊 Electronic Configuration Lab Report - **Due Monday**")
+        st.error("Progress data unavailable.")
