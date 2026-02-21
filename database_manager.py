@@ -7,7 +7,6 @@ from googleapiclient.http import MediaIoBaseUpload
 import io
 from datetime import datetime
 
-# --- AUTHENTICATION ---
 def get_creds():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     try:
@@ -23,7 +22,6 @@ def get_gspread_client():
     creds = get_creds()
     return gspread.authorize(creds) if creds else None
 
-# --- LOGIN ---
 def check_login(user_id):
     client = get_gspread_client()
     try:
@@ -34,7 +32,6 @@ def check_login(user_id):
         return match.iloc[0].to_dict() if not match.empty else None
     except: return None
 
-# --- TEACHER & RESEARCHER FUNCTIONS ---
 def save_bulk_concepts(teacher_id, group, main_title, data):
     try:
         client = get_gspread_client()
@@ -69,7 +66,6 @@ def upload_to_drive(uploaded_file):
         st.error(f"Drive Error: {e}")
         return ""
 
-# --- STUDENT & PROGRESS FUNCTIONS ---
 def log_assessment(user_id, group, module_id, t1, t2, t3, t4, diag, misc):
     try:
         client = get_gspread_client()
