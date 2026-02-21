@@ -7,6 +7,7 @@ from googleapiclient.http import MediaIoBaseUpload
 import io
 from datetime import datetime
 
+# --- AUTHENTICATION ---
 def get_creds():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     try:
@@ -22,6 +23,20 @@ def get_gspread_client():
     creds = get_creds()
     return gspread.authorize(creds) if creds else None
 
+# --- LOGIN (Crucial Fix for AttributeError) ---
+def check_login(user_id):
+    client = get_gspread_client()
+    try:
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        df = pd.DataFrame(sh.worksheet("Participants").get_all_records())
+        df['User_ID'] = df['User_ID'].astype(str).str.upper()
+        match = df[df['User_ID'] == user_id.upper()]
+        return match.iloc[0].to_dict() if not match.empty else None
+    except Exception as e:
+        st.error(f"Login Database Error: {e}")
+        return None
+
+# --- TEACHER: SAVE MODULES ---
 def save_bulk_concepts(teacher_id, group, main_title, data):
     try:
         client = get_gspread_client()
@@ -39,9 +54,10 @@ def save_bulk_concepts(teacher_id, group, main_title, data):
         ws.append_row(row)
         return True
     except Exception as e:
-        st.error(f"Sync Error: {e}")
+        st.error(f"GSheets Sync Error: {e}")
         return False
 
+# --- DRIVE: UPLOAD ASSETS (Fixed for 404 Error) ---
 def upload_to_drive(uploaded_file):
     FOLDER_ID = "0AJAe9AoSTt6-Uk9PVA" 
     try:
@@ -50,7 +66,7 @@ def upload_to_drive(uploaded_file):
         meta = {'name': uploaded_file.name, 'parents': [FOLDER_ID]}
         media = MediaIoBaseUpload(io.BytesIO(uploaded_file.getvalue()), mimetype=uploaded_file.type)
         
-        # FIXED: Added supportsAllDrives=True to handle Shared Drives
+        # FIXED: supportsAllDrives=True resolves the 'File Not Found' on Shared Drives
         f = service.files().create(
             body=meta, 
             media_body=media, 
@@ -69,6 +85,7 @@ def upload_to_drive(uploaded_file):
         st.error(f"Drive Error: {e}")
         return ""
 
+# --- LOGGING ---
 def log_assessment(user_id, group, module_id, t1, t2, t3, t4, diag, misc):
     try:
         client = get_gspread_client()
