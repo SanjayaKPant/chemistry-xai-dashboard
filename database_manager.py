@@ -97,3 +97,14 @@ def log_temporal_trace(user_id, event, details=""):
         ws = sh.worksheet("Temporal_Traces")
         ws.append_row([user_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), event, details])
     except: pass
+
+def get_engagement_data():
+    """Fetches and processes data for Sankey and Bar charts."""
+    try:
+        client = get_gspread_client()
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        logs = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
+        traces = pd.DataFrame(sh.worksheet("Temporal_Traces").get_all_records())
+        return logs, traces
+    except Exception as e:
+        return pd.DataFrame(), pd.DataFrame()
