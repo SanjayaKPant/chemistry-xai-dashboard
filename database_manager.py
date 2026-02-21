@@ -23,35 +23,18 @@ def get_gspread_client():
     creds = get_creds()
     return gspread.authorize(creds) if creds else None
 
-# --- LOGIN ---
-def check_login(user_id):
-    client = get_gspread_client()
-    try:
-        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        df = pd.DataFrame(sh.worksheet("Participants").get_all_records())
-        df['User_ID'] = df['User_ID'].astype(str).str.upper()
-        match = df[df['User_ID'] == user_id.upper()]
-        return match.iloc[0].to_dict() if not match.empty else None
-    except Exception as e:
-        return None
-
-# --- TEACHER: SAVE MODULES (15 Columns) ---
+# --- TEACHER: SAVE MODULES ---
 def save_bulk_concepts(teacher_id, group, main_title, data):
-    """
-    Saves data in the exact 15-column sequence:
-    Timestamp, Teacher_ID, Group, Main_Title, Sub_Title, Learning_Objectives, 
-    File_Links, Video_Links, Diagnostic_Question, Option_A, Option_B, 
-    Option_C, Option_D, Correct_Answer, Socratic_Tree
-    """
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         ws = sh.worksheet("Instructional_Materials")
         
+        # Ensure the column names here match your GSheet exactly
         row = [
             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             teacher_id,
-            group,
+            group, # This saves as "Group"
             main_title,
             data.get('sub_title', ''),
             data.get('objectives', ''),
@@ -73,8 +56,8 @@ def save_bulk_concepts(teacher_id, group, main_title, data):
 
 # --- DRIVE: UPLOAD ASSETS ---
 def upload_to_drive(uploaded_file):
-    """Uploads to the PhD Research folder and returns a viewable link."""
-    FOLDER_ID = "0AJAe9AoSTt6-Uk9PVA" # Updated Folder ID
+    # Correct ID extracted from your URL
+    FOLDER_ID = "0AJAe9AoSTt6-Uk9PVA" 
     try:
         creds = get_creds()
         service = build('drive', 'v3', credentials=creds)
@@ -86,10 +69,9 @@ def upload_to_drive(uploaded_file):
         media = MediaIoBaseUpload(io.BytesIO(uploaded_file.getvalue()), 
                                   mimetype=uploaded_file.type)
         
-        # Upload file
         file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
         
-        # PERMISSION: Allow anyone with the link to view (Crucial for students)
+        # Public permission so students can view the PDF/Image
         service.permissions().create(
             fileId=file.get('id'),
             body={'type': 'anyone', 'role': 'reader'}
@@ -97,26 +79,5 @@ def upload_to_drive(uploaded_file):
         
         return file.get('webViewLink')
     except Exception as e:
-        st.error(f"Drive Upload Error: {e}")
+        st.error(f"Drive Error: {e}")
         return ""
-
-# --- LOGGING: ASSESSMENTS & TRACES ---
-def log_assessment(user_id, group, module_id, t1, t2, t3, t4, diag, misc):
-    try:
-        client = get_gspread_client()
-        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        ws = sh.worksheet("Assessment_Logs")
-        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        ws.append_row([ts, user_id, module_id, t1, t2, t3, t4, diag, misc, group])
-        return True
-    except Exception as e:
-        return False
-
-def log_temporal_trace(user_id, event, details=""):
-    try:
-        client = get_gspread_client()
-        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        ws = sh.worksheet("Temporal_Traces")
-        ws.append_row([user_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), event, details])
-    except Exception as e:
-        pass
