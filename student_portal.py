@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import google.generativeai as genai
 from database_manager import get_gspread_client, log_assessment, log_temporal_trace
+import plotly.express as px
 
 # --- RESEARCH-GRADE SOCRATIC SYSTEM PROMPT ---
 SOCRATIC_PROMPT = """
@@ -19,177 +20,111 @@ ETHICAL GUIDELINES:
 """
 
 def show():
-    if 'user' not in st.session_state:
-        st.error("Please log in again.")
-        return
-
+    if 'user' not in st.session_state: return
     user = st.session_state.user
-    # Standardizing Group name and User ID
     user_school = str(user.get('Group', 'School B')).strip()
-    user_id = user.get('User_ID')
     
-    st.sidebar.title(f"👤 {user.get('Name', 'Student')}")
-    st.sidebar.info(f"🏫 {user_school} | ID: {user_id}")
+    # Navigation Sidebar
+    st.sidebar.markdown(f"### 🎓 Student Portal\n**{user.get('Name')}**")
+    st.sidebar.caption(f"🏫 {user_school} | ID: {user.get('User_ID')}")
     
-    # NAVIGATION LOGIC: School A gets the AI Tutor (Experimental), School B is Control
-    menu = ["📚 Digital Library", "📊 My Progress"]
-    if "EXP_A" in user_school.upper() or "SCHOOL A" in user_school.upper():
-        menu = ["📚 Digital Library", "🤖 Socratic Tutor", "📊 My Progress"]
-        
-    choice = st.sidebar.radio("Research Navigation", menu)
+    menu = ["🏠 Dashboard", "📚 Learning Modules", "📝 Assignments", "🤖 Socratic Tutor", "📈 My Progress"]
+    choice = st.sidebar.radio("Main Menu", menu)
 
-    if choice == "📚 Digital Library":
+    if choice == "🏠 Dashboard":
+        render_dashboard(user)
+    elif choice == "📚 Learning Modules":
         render_learning_path(user_school)
+    elif choice == "📝 Assignments":
+        render_assignments(user_school)
     elif choice == "🤖 Socratic Tutor":
         render_socratic_tutor()
-    elif choice == "📊 My Progress":
-        render_progress(user_id)
+    elif choice == "📈 My Progress":
+        render_visual_progress(user.get('User_ID'))
+
+def render_dashboard(user):
+    st.title(f"Welcome to your Chemistry Hub, {user.get('Name')}! 🧪")
+    st.markdown("---")
+    c1, c2, c3 = st.columns(3)
+    with c1: st.metric("Completed Modules", "0") # Replace with dynamic count
+    with c2: st.metric("Current Confidence", "N/A")
+    with c3: st.metric("Pending Tasks", "2")
 
 def render_learning_path(school):
-    st.subheader("📖 Chemistry Digital Library")
+    st.subheader("📚 Digital Learning Library")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         ws = sh.worksheet("Instructional_Materials")
+        data = ws.get_all_values()
         
-        raw_data = ws.get_all_values()
-        if len(raw_data) < 2:
+        if len(data) < 2:
             st.info("No lessons have been deployed yet.")
             return
 
-        # Header Normalization
-        headers = [str(h).strip().upper().replace(" ", "_") for h in raw_data[0]]
-        df = pd.DataFrame(raw_data[1:], columns=headers)
+        df = pd.DataFrame(data[1:], columns=data[0])
+        # Filter for student group
+        my_data = df[df['Group'].str.strip().str.upper() == school.upper()]
 
-        if 'GROUP' in df.columns:
-            my_data = df[df['GROUP'].str.strip().str.upper() == school.upper()]
-        else:
-            st.error("Column 'Group' not found in spreadsheet.")
-            return
-
-        if not my_data.empty:
-            for idx, row in my_data.iterrows():
-                title = row.get('SUB_TITLE', 'Unnamed Concept')
-                with st.expander(f"🔹 {title}", expanded=True):
-                    st.write(f"**Objectives:** {row.get('LEARNING_OBJECTIVES', 'N/A')}")
+        for idx, row in my_data.iterrows():
+            with st.expander(f"🔹 {row['Sub_Title']}", expanded=True):
+                # 1. Objectives
+                st.info(f"🎯 **Objectives:** {row['Learning_Objectives']}")
+                
+                # 2. Attachments & Resources (TOP PART)
+                st.markdown("#### 📥 Lesson Resources")
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    if row['File_Links']: st.link_button("📄 Open Textbook PDF", row['File_Links'], use_container_width=True)
+                with col_b:
+                    if row['Video_Links']: st.link_button("🎥 Watch Video Lesson", row['Video_Links'], use_container_width=True)
+                
+                st.markdown("---")
+                
+                # 3. 4-Tier Assessment
+                st.markdown(f"#### ❓ Diagnostic Question")
+                st.write(row['Diagnostic_Question'])
+                
+                with st.form(key=f"diag_form_{idx}"):
+                    t1 = st.radio("Tier 1: Select correct option", [row['Option_A'], row['Option_B'], row['Option_C'], row['Option_D']])
+                    t2 = st.select_slider("Tier 2: Confidence in Answer", ["Unsure", "Sure", "Very Sure"])
+                    t3 = st.text_area("Tier 3: Reasoning (Scientific Justification)", placeholder="Explain why you chose this...")
+                    t4 = st.select_slider("Tier 4: Confidence in Reasoning", ["Unsure", "Sure", "Very Sure"])
                     
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        if row.get('FILE_LINKS'): st.link_button("📄 View Textbook PDF", row['FILE_LINKS'])
-                    with c2:
-                        if row.get('VIDEO_LINKS'): st.link_button("🎥 Watch Lesson Video", row['VIDEO_LINKS'])
+                    if st.form_submit_button("Submit & Start AI Tutoring"):
+                        log_assessment(st.session_state.user['User_ID'], school, row['Sub_Title'], t1, t2, t3, t4, "Logged", "N/A")
+                        st.session_state.last_justification = t3
+                        st.session_state.current_sub = row['Sub_Title']
+                        st.success("Success! Now open the '🤖 Socratic Tutor' tab to discuss.")
 
-                    st.markdown("---")
-                    st.markdown("### 🧪 4-Tier Diagnostic Assessment")
-                    
-                    with st.form(key=f"tier_form_{idx}"):
-                        st.info("Complete all four tiers to unlock the Socratic Tutor session.")
-                        
-                        # Tier 1: Content Answer
-                        t1 = st.radio("Tier 1: Select the correct scientific option:", ["A", "B", "C", "D"], key=f"t1_{idx}")
-                        
-                        # Tier 2: Answer Confidence
-                        t2 = st.select_slider("Tier 2: How confident are you in your choice?", 
-                                             ["Unsure", "Sure", "Very Sure"], key=f"t2_{idx}")
-                        
-                        # Tier 3: Scientific Justification (The Key for the AI)
-                        t3 = st.text_area("Tier 3: Justify your reasoning (The 'Why' behind your answer):", 
-                                          key=f"t3_{idx}", 
-                                          placeholder="Explain using molecular behavior or periodic laws...")
-                        
-                        # Tier 4: Reasoning Confidence
-                        t4 = st.select_slider("Tier 4: How confident are you in your reasoning?", 
-                                             ["Unsure", "Sure", "Very Sure"], key=f"t4_{idx}")
-                        
-                        if st.form_submit_button("Submit Response & Unlock AI"):
-                            if not t3.strip():
-                                st.warning("Please provide your reasoning in Tier 3 to continue.")
-                            else:
-                                success = log_assessment(
-                                    user_id=st.session_state.user['User_ID'], 
-                                    group=school, 
-                                    module_id=title, 
-                                    t1=t1, t2=t2, t3=t3, t4=t4, 
-                                    diag="Initial Submission", 
-                                    misc="Awaiting Socratic Loop"
-                                )
-                                if success:
-                                    # CORE TRANSITION LOGIC
-                                    st.session_state.current_sub = title
-                                    st.session_state.current_tree = row.get('SOCRATIC_TREE', row.get('TREE_LOGIC', ""))
-                                    st.session_state.last_justification = t3
-                                    
-                                    # Reset chat messages for a fresh session on this topic
-                                    if "messages" in st.session_state:
-                                        st.session_state.messages = []
-                                        
-                                    st.success(f"✅ Data logged! Research transition active. Switch to '🤖 Socratic Tutor' in the sidebar.")
-                                    st.balloons()
-        else:
-            st.warning(f"No modules currently assigned to {school}.")
     except Exception as e:
-        st.error(f"Module Load Error: {e}")
+        st.error(f"Error loading modules: {e}")
 
-# --- AI CORE CONFIGURATION ---
-try:
-    if "GEMINI_API_KEY" in st.secrets:
-        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        model = genai.GenerativeModel('gemini-1.5-flash-latest', system_instruction=SOCRATIC_PROMPT)
-except:
-    pass
-
-def render_socratic_tutor():
-    st.subheader("🤖 Socratic Reasoning Assistant")
-    
-    if 'last_justification' not in st.session_state:
-        st.info("💡 **Step 1:** Go to the 'Digital Library'.\n**Step 2:** Complete a Diagnostic Assessment.\n**Step 3:** Return here to refine your reasoning with the AI.")
-        return
-
-    concept = st.session_state.get('current_sub', "Chemistry")
-    tree_logic = st.session_state.get('current_tree', "")
-    student_thought = st.session_state.get('last_justification', "")
-
-    # INITIALIZE SOCRATIC CHAT WITH TIER 3 CONTEXT
-    if "messages" not in st.session_state or len(st.session_state.messages) == 0:
-        st.session_state.messages = [{
-            "role": "assistant", 
-            "content": f"I see your reasoning for **{concept}** was: *'{student_thought}'*. \n\nLet's explore that further. Based on the **Modern Periodic Law**, why might your reasoning be incomplete?"
-        }]
-
-    for m in st.session_state.messages:
-        with st.chat_message(m["role"]):
-            st.markdown(m["content"])
-
-    if prompt := st.chat_input("Continue the scientific dialogue..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        # Research Context injection: Combines teacher's plan with student's current input
-        research_context = f"Topic: {concept}. Teacher Logic/Tree: {tree_logic}. Student Response: {prompt}."
-        
-        try:
-            chat = model.start_chat(history=[{"role": m["role"], "parts": [m["content"]]} for m in st.session_state.messages[:-1]])
-            response = chat.send_message(research_context)
-            
-            with st.chat_message("assistant"):
-                st.markdown(response.text)
-                st.session_state.messages.append({"role": "assistant", "content": response.text})
-            
-            log_temporal_trace(st.session_state.user['User_ID'], "AI_CHAT_TURN", concept)
-        except Exception as e:
-            st.error(f"Socratic Engine Error: {e}")
-
-def render_progress(uid):
-    st.subheader("📊 Your Research Progress")
+def render_visual_progress(uid):
+    st.subheader("📈 Your Personal Learning Progress")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
-        user_df = df[df['User_ID'].astype(str) == str(uid)]
-        if not user_df.empty:
-            st.dataframe(user_df, use_container_width=True)
+        df_logs = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
+        user_logs = df_logs[df_logs['User_ID'].astype(str) == str(uid)]
+        
+        if not user_logs.empty:
+            # Indicator Line (Confidence Tracker)
+            fig = px.line(user_logs, x="Timestamp", y="Tier_2", title="Confidence Progression", markers=True)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Module Mastery Bar
+            mastery = user_logs['Module_ID'].value_counts().reset_index()
+            fig_bar = px.bar(mastery, x='Module_ID', y='count', title="Activity per Topic")
+            st.plotly_chart(fig_bar, use_container_width=True)
         else:
-            st.info("No assessment logs found yet.")
+            st.info("Complete an assessment to see your progress graph!")
     except:
-        st.error("Progress log unavailable.")
+        st.error("Progress data sheet not found.")
+
+def render_assignments(school):
+    st.subheader("📝 Assignment List")
+    st.info("The assignments below are assigned to your group.")
+    # Placeholder for assignment logic
+    st.write("1. 🧪 Modern Periodic Law Worksheet - **Due Friday**")
+    st.write("2. 📊 Electronic Configuration Lab Report - **Due Monday**")
