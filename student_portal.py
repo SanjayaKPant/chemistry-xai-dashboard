@@ -4,21 +4,6 @@ import google.generativeai as genai
 from database_manager import get_gspread_client, log_assessment, log_temporal_trace
 import plotly.express as px
 
-# --- RESEARCH-GRADE SOCRATIC SYSTEM PROMPT ---
-SOCRATIC_PROMPT = """
-You are a Socratic Chemistry Tutor designed for Grade 10 students in Nepal. 
-Your goal is to guide students toward conceptual clarity using the National Curriculum standards.
-
-SCIENTIFIC APPROACH:
-1. Ground questions in molecular behavior, periodic trends (Modern Periodic Law), and sub-shell electronic configuration (Aufbau's Principle).
-2. Address specific textbook concepts: Metals/Non-metals, Alkali/Alkaline Earth metals, and Halogens.
-3. Scaffolding: Use the 'Socratic_Tree' guidance from the teacher to identify logical hurdles.
-
-ETHICAL GUIDELINES:
-- Never provide the final answer or chemical formulas directly.
-- Use encouraging language to reduce 'Science Anxiety'.
-"""
-
 def show():
     if 'user' not in st.session_state: return
     user = st.session_state.user
@@ -62,37 +47,27 @@ def render_learning_path(school):
             st.info("No lessons have been deployed yet.")
             return
 
-        # Convert to DataFrame
         df = pd.DataFrame(data[1:], columns=data[0])
-        
-        # FIX: Normalize column names to avoid Case-Sensitivity issues
-        df.columns = [c.strip().upper() for c in df.columns]
-        
-        # FIX: Normalize the filter
-        target_school = str(school).strip().upper()
-        my_data = df[df['GROUP'].str.strip().str.upper() == target_school]
-
-        if my_data.empty:
-            st.warning(f"No modules found for {school}. (Searched for: {target_school})")
-            return
+        # Filter for student group
+        my_data = df[df['Group'].str.strip().str.upper() == school.upper()]
 
         for idx, row in my_data.iterrows():
-            with st.expander(f"🔹 {row.get('SUB_TITLE', 'Concept')}", expanded=True):
-                # UI Component: Learning Resources (Top)
-                st.info(f"🎯 **Objectives:** {row.get('LEARNING_OBJECTIVES', 'N/A')}")
+            with st.expander(f"🔹 {row['Sub_Title']}", expanded=True):
+                # 1. Objectives
+                st.info(f"🎯 **Objectives:** {row['Learning_Objectives']}")
                 
-                c1, c2 = st.columns(2)
-                with c1:
-                    if row.get('FILE_LINKS'): 
-                        st.link_button("📄 Open PDF/Image", row['FILE_LINKS'], use_container_width=True)
-                with c2:
-                    if row.get('VIDEO_LINKS'): 
-                        st.link_button("🎥 Watch Video", row['VIDEO_LINKS'], use_container_width=True)
+                # 2. Attachments & Resources (TOP PART)
+                st.markdown("#### 📥 Lesson Resources")
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    if row['File_Links']: st.link_button("📄 Open Textbook PDF", row['File_Links'], use_container_width=True)
+                with col_b:
+                    if row['Video_Links']: st.link_button("🎥 Watch Video Lesson", row['Video_Links'], use_container_width=True)
                 
                 st.markdown("---")
                 
-                # 4-Tier Assessment
-                st.markdown(f"#### ❓ {row.get('DIAGNOSTIC_QUESTION', 'Question missing')}")
+                # 3. 4-Tier Assessment
+                st.markdown(f"#### ❓ Diagnostic Question")
                 st.write(row['Diagnostic_Question'])
                 
                 with st.form(key=f"diag_form_{idx}"):
