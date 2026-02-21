@@ -35,28 +35,37 @@ def check_login(user_id):
     except: return None
 
 # --- TEACHER: DEPLOY MATERIALS ---
-def save_bulk_concepts(teacher_id, group, main_title, concept_data):
-    """Matches exact order: Timestamp, Teacher_ID, Group, Main_Title, Sub_Title, Learning_Objectives, File_Links, Video_Links, Socratic_Tree"""
+def save_bulk_concepts(teacher_id, group, main_title, data):
+    """
+    Saves to Instructional_Materials.
+    Order: Timestamp, Teacher_ID, Group, Main_Title, Sub_Title, Learning_Objectives, 
+    File_Links, Video_Links, Diagnostic_Question, Option_A, Option_B, Option_C, 
+    Option_D, Correct_Answer, Socratic_Tree
+    """
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         ws = sh.worksheet("Instructional_Materials")
-        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         row = [
-            ts, teacher_id, group, main_title, 
-            concept_data['sub_title'], 
-            concept_data['objectives'],
-            concept_data.get('file_link', ""),
-            concept_data.get('video_link', ""),
-            concept_data.get('socratic_tree', "")
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            teacher_id,
+            group,
+            main_title,
+            data['sub_title'],
+            data['objectives'],
+            data['file_link'],
+            data['video_link'],
+            data['q_text'],
+            data['oa'], data['ob'], data['oc'], data['od'],
+            data['correct'],
+            data['socratic_tree']
         ]
         ws.append_row(row)
         return True
     except Exception as e:
-        st.error(f"Save Error: {e}")
+        st.error(f"Database Error: {e}")
         return False
-
 # --- STUDENT: LOG 4-TIER RESPONSE ---
 def log_assessment(user_id, group, module_id, t1, t2, t3, t4, diag, misc):
     """Matches: Timestamp, User_ID, Module_ID, Tier_1, Tier_2, Tier_3, Tier_4, Diagnostic_Result, Misconception_Tag, Group"""
