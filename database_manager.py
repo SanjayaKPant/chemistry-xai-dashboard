@@ -7,7 +7,6 @@ from googleapiclient.http import MediaIoBaseUpload
 import io
 from datetime import datetime
 
-# --- AUTHENTICATION ---
 def get_creds():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     try:
@@ -23,7 +22,6 @@ def get_gspread_client():
     creds = get_creds()
     return gspread.authorize(creds) if creds else None
 
-# --- LOGIN (Crucial Fix for AttributeError) ---
 def check_login(user_id):
     client = get_gspread_client()
     try:
@@ -34,7 +32,6 @@ def check_login(user_id):
         return match.iloc[0].to_dict() if not match.empty else None
     except: return None
 
-# --- DRIVE: UPLOAD (Shared Drive Support) ---
 def upload_to_drive(uploaded_file):
     FOLDER_ID = "0AJAe9AoSTt6-Uk9PVA" 
     try:
@@ -47,30 +44,17 @@ def upload_to_drive(uploaded_file):
         return f.get('webViewLink')
     except: return ""
 
-# --- DATA SAVING ---
 def save_bulk_concepts(teacher_id, group, main_title, data):
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         ws = sh.worksheet("Instructional_Materials")
-        # Explicit column mapping to avoid 'removed' features
-        row = [
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"), teacher_id, group, main_title, 
-            data.get('sub_title',''), data.get('objectives',''), data.get('file_link',''), 
-            data.get('video_link',''), data.get('q_text',''), data.get('oa',''), 
-            data.get('ob',''), data.get('oc',''), data.get('od',''), 
-            data.get('correct',''), data.get('socratic_tree','')
-        ]
+        row = [datetime.now().strftime("%Y-%m-%d %H:%M:%S"), teacher_id, group, main_title, 
+               data.get('sub_title',''), data.get('objectives',''), data.get('file_link',''), 
+               data.get('video_link',''), data.get('q_text',''), data.get('oa',''), 
+               data.get('ob',''), data.get('oc',''), data.get('od',''), 
+               data.get('correct',''), data.get('socratic_tree','')]
         ws.append_row(row)
-        return True
-    except: return False
-
-def save_assignment(teacher_id, group, title, desc, file_url):
-    try:
-        client = get_gspread_client()
-        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        ws = sh.worksheet("Assignments")
-        ws.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), teacher_id, group, title, desc, file_url])
         return True
     except: return False
 
@@ -82,11 +66,3 @@ def log_assessment(user_id, group, module_id, t1, t2, t3, t4, diag, misc):
         ws.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user_id, module_id, t1, t2, t3, t4, diag, misc, group])
         return True
     except: return False
-
-def log_temporal_trace(user_id, event, details=""):
-    try:
-        client = get_gspread_client()
-        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        ws = sh.worksheet("Temporal_Traces")
-        ws.append_row([user_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), event, details])
-    except: pass
