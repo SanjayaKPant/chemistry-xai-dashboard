@@ -26,7 +26,7 @@ def show():
 
 def render_dashboard(user, group):
     st.title(f"🚀 Student Command Center")
-    st.info(f"Welcome, Scientist. You are in the **{group}** study group.")
+    st.info(f"Welcome. You are participating in the **{group}** study group.")
     st.success("Navigate to 'Learning Modules' to begin your chemistry assignment.")
 
 def render_modules(student_group):
@@ -43,7 +43,7 @@ def render_modules(student_group):
             return
 
         for idx, row in my_lessons.iterrows():
-            with st.expander(f"📖 {row.get('Sub_Title')}", expanded=True):
+            with st.expander(f"📖 {row.get('Main_Title')} - {row.get('Sub_Title')}", expanded=True):
                 col1, col2 = st.columns(2)
                 f_link = str(row.get('File_Links (PDF/Images)', '')).strip()
                 if f_link.startswith("http"):
@@ -82,13 +82,17 @@ def render_ai_chat(school):
         return
 
     st.header(f"🤖 Socratic Tutor: {st.session_state.current_topic}")
-    
 
     try:
         api_key = st.secrets.get("GEMINI_API_KEY")
-        # FORCING STABLE TRANSPORT
+        # --- THE STABLE FIX ---
+        # We force 'rest' transport which uses standard HTTP instead of gRPC.
+        # This prevents the library from trying to find a 'v1beta' endpoint.
         genai.configure(api_key=api_key, transport='rest')
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        # KEY CHANGE: Using the full path 'models/gemini-1.5-flash' 
+        # avoids the automatic v1beta redirection in most library versions.
+        model = genai.GenerativeModel('models/gemini-1.5-flash')
     except Exception as e:
         st.error(f"AI Setup Error: {e}")
         return
@@ -99,18 +103,26 @@ def render_ai_chat(school):
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.markdown(m["content"])
 
-    if prompt := st.chat_input("Ask about this element's classification..."):
+    if prompt := st.chat_input("Explain your chemistry reasoning..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
         try:
-            system_prompt = f"PhD Chemistry Socratic Tutor. Topic: {st.session_state.current_topic}. Goal: {st.session_state.logic_tree}. Never give answers. Max 3 sentences."
+            # PhD Socratic Prompting
+            system_prompt = (
+                f"Act as a Socratic Tutor for Grade 10 Chemistry. "
+                f"Topic: {st.session_state.current_topic}. "
+                f"Goal: Lead student to discover {st.session_state.logic_tree}. "
+                f"Rule: Never give the answer. Ask a follow-up question. Max 3 sentences."
+            )
             response = model.generate_content(f"{system_prompt}\nStudent: {prompt}")
+            
             with st.chat_message("assistant"):
                 st.markdown(response.text)
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
             log_temporal_trace(st.session_state.user['User_ID'], "AI_CHAT", st.session_state.current_topic)
         except Exception as e:
             st.error(f"⚠️ Connection Error: {e}")
+            st.info("Wait 10 seconds and try again—your API key may still be synchronizing.")
 
 def render_progress(uid):
     st.header("📈 My Progress Tracker")
@@ -120,8 +132,8 @@ def render_progress(uid):
         df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
         user_df = df[df['User_ID'].astype(str) == str(uid)]
         if not user_df.empty:
-            # FIXED: Closed the parenthesis for px.line below
-            fig = px.line(user_df, x="Timestamps", y="Tier_2 (Confidence_Ans)", title="Confidence Growth", markers=True)
+            fig = px.line(user_df, x="Timestamps", y="Tier_2 (Confidence_Ans)", 
+                         title="Your Learning Journey", markers=True)
             st.plotly_chart(fig, use_container_width=True)
     except Exception as e:
-        st.error("Analytics updating...")
+        st.error(f"Analytics updating...")
