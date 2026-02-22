@@ -27,7 +27,7 @@ def show():
 def render_dashboard(user, group):
     st.title(f"🚀 Student Command Center")
     st.info(f"Welcome. You are participating in the **{group}** study group.")
-    st.success("Navigate to 'Learning Modules' to begin your assignment.")
+    st.success("Navigate to 'Learning Modules' to begin your chemistry assignment.")
 
 def render_modules(student_group):
     st.header("📚 Your Learning Path")
@@ -48,6 +48,7 @@ def render_modules(student_group):
                 f_link = str(row.get('File_Links (PDF/Images)', '')).strip()
                 if f_link.startswith("http"):
                     col1.link_button("📂 View Chapter PDF", f_link, use_container_width=True)
+                
                 v_link = str(row.get('Video_Links', '')).strip()
                 if v_link.startswith("http"):
                     col2.video(v_link)
@@ -69,7 +70,7 @@ def render_modules(student_group):
                         log_assessment(st.session_state.user['User_ID'], student_group, row.get('Sub_Title'), t1, t2, t3, t4, "Complete", "")
                         st.session_state.current_topic = row.get('Sub_Title')
                         st.session_state.logic_tree = row.get('Socratic_Tree')
-                        st.success("✅ Logged! Now open the AI Tutor tab.")
+                        st.success("✅ Diagnostic Logged! You can now use the AI Tutor.")
     except Exception as e:
         st.error(f"⚠️ System Error: {e}")
 
@@ -82,14 +83,15 @@ def render_ai_chat(school):
         return
 
     st.header(f"🤖 Socratic Tutor: {st.session_state.current_topic}")
-    
 
     try:
-        # THE FIX: We use a simplified configuration that avoids gRPC errors
         api_key = st.secrets.get("GEMINI_API_KEY")
+        # --- THE STABLE FIX ---
+        # We force 'rest' transport which uses standard HTTP instead of gRPC.
+        # This prevents the library from trying to find a 'v1beta' endpoint.
         genai.configure(api_key=api_key, transport='rest')
         
-        # Using the standard model string
+        # We specify the model using the stable v1-supported string
         model = genai.GenerativeModel('gemini-1.5-flash')
     except Exception as e:
         st.error(f"AI Setup Error: {e}")
@@ -106,11 +108,11 @@ def render_ai_chat(school):
         with st.chat_message("user"): st.markdown(prompt)
         try:
             system_prompt = (
-                f"PhD Socratic Tutor. Topic: {st.session_state.current_topic}. "
-                f"Logic: {st.session_state.logic_tree}. Never give answers. "
-                "Ask guiding questions. Max 3 sentences."
+                f"PhD Chemistry Socratic Tutor. Topic: {st.session_state.current_topic}. "
+                f"Discovery Goal: {st.session_state.logic_tree}. "
+                f"Rule: Never give direct answers. Ask a guiding question. Max 3 sentences."
             )
-            # This request uses the forced REST transport from above
+            # The 'rest' transport configured above will handle this call via v1
             response = model.generate_content(f"{system_prompt}\nStudent: {prompt}")
             
             with st.chat_message("assistant"):
@@ -118,7 +120,8 @@ def render_ai_chat(school):
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
             log_temporal_trace(st.session_state.user['User_ID'], "AI_CHAT", st.session_state.current_topic)
         except Exception as e:
-            st.error(f"⚠️ Connection Error: {e}")
+            st.error(f"⚠️ AI Connection Error: {e}")
+            st.info("Double check your API key in Streamlit Secrets. If it's new, it may take 2 minutes to activate.")
 
 def render_progress(uid):
     st.header("📈 My Progress Tracker")
@@ -128,9 +131,9 @@ def render_progress(uid):
         df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
         user_df = df[df['User_ID'].astype(str) == str(uid)]
         if not user_df.empty:
-            # Fixed the closing parenthesis here as per logs
+            # FIXED: Syntax error from logs (missing parenthesis) corrected here
             fig = px.line(user_df, x="Timestamps", y="Tier_2 (Confidence_Ans)", 
-                         title="Your Learning Journey", markers=True)
+                         title="Learning Progress over Time", markers=True)
             st.plotly_chart(fig, use_container_width=True)
-    except:
-        st.error("Analytics updating...")
+    except Exception as e:
+        st.error(f"Analytics updating...")
