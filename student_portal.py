@@ -9,7 +9,7 @@ def show():
     user = st.session_state.user
     school = str(user.get('Group', 'School B')).strip()
     
-    # CSS for high-density professional UI
+    # CSS for the High-Density Professional Dashboard
     st.markdown("""
         <style>
         .metric-card { background: white; padding: 15px; border-radius: 10px; border: 1px solid #eee; text-align: center; }
@@ -35,64 +35,61 @@ def show():
 
 def render_dashboard(user, school):
     st.title(f"🚀 Student Command Center")
-    
-    # Fill whitespace with key metrics
     m1, m2, m3, m4 = st.columns(4)
     with m1: st.markdown(f'<div class="metric-card"><h3>Group</h3><p>{school}</p></div>', unsafe_allow_html=True)
-    with m2: st.markdown('<div class="metric-card"><h3>Course</h3><p>Chemistry X</p></div>', unsafe_allow_html=True)
+    with m2: st.markdown('<div class="metric-card"><h3>Course</h3><p>Chemistry 10</p></div>', unsafe_allow_html=True)
     with m3: st.markdown('<div class="metric-card"><h3>Status</h3><p>Active</p></div>', unsafe_allow_html=True)
     with m4: st.markdown('<div class="metric-card"><h3>Task</h3><p>Diagnostic</p></div>', unsafe_allow_html=True)
 
     st.markdown("---")
     c1, c2 = st.columns([2, 1])
     with c1:
-        st.subheader("📢 Teacher's Guidance")
-        st.info("💡 **Welcome, Student!** Pro-tip: Review the instructional materials (PDF/Video) below before submitting your assessment to unlock the Socratic AI Tutor.")
+        st.subheader("📢 Teacher's Updates")
+        st.info("💡 **Welcome!** Please visit 'Learning Modules' to access your instructional videos and PDFs. Complete the quiz to unlock the AI Tutor.")
     with c2:
         st.subheader("📊 Course Progress")
         st.progress(0.4)
-        st.caption("40% Completion")
+        st.caption("Overall Mastery: 40%")
 
 def render_modules(school):
-    st.header("📚 Learning Modules")
+    st.header("📚 Your Learning Path")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         data = sh.worksheet("Instructional_Materials").get_all_values()
         
-        # --- DATA NORMALIZATION LAYER ---
+        # --- SMART MAPPING LAYER ---
         df = pd.DataFrame(data[1:], columns=data[0])
-        # Force column names to lowercase and strip spaces to match database_manager.py logic
+        # Force all column headers to be lowercase and no spaces for reliable lookups
         df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
         
-        # Filter modules for the student's group
+        # Filtering for the correct group
         my_lessons = df[df['group'].str.upper() == school.upper()]
 
         if my_lessons.empty:
-            st.warning("No learning materials have been assigned to your group yet.")
+            st.warning("No materials have been deployed for your group yet.")
             return
 
         for idx, row in my_lessons.iterrows():
             with st.container():
-                # Display Titles & Objectives
-                st.markdown(f"## {row.get('main_title', 'Module')}")
-                st.markdown(f"<div class='sub-title-text'>{row.get('sub_title', 'Section')}</div>", unsafe_allow_html=True)
-                st.markdown(f"<span class='objective-text'>🎯 {row.get('objectives', 'Standard objective')}</span>", unsafe_allow_html=True)
+                st.markdown(f"## {row.get('main_title', row.get('chapter_(main_title)', 'Module'))}")
+                st.markdown(f"<div class='sub-title-text'>{row.get('sub_title', row.get('concept_(sub_title)', 'Topic'))}</div>", unsafe_allow_html=True)
+                st.markdown(f"<span class='objective-text'>🎯 {row.get('objectives', 'Standard Learning Objective')}</span>", unsafe_allow_html=True)
 
-                # --- PART 1: INSTRUCTIONAL MATERIALS (TOP SECTION) ---
+                # --- 1. INSTRUCTIONAL MATERIALS (PDF & VIDEO) ---
                 st.markdown('<div class="instruction-container">', unsafe_allow_html=True)
-                st.write("#### 📦 Lesson Resources")
+                st.write("#### 📖 Lesson Resources")
                 col_file, col_vid = st.columns([1, 1.2])
                 
                 with col_file:
                     st.write("**📄 Reference Materials**")
-                    links = str(row.get('file_link', '')).split(", ")
-                    valid_links = [l.strip() for l in links if l.strip().startswith("http")]
+                    raw_links = str(row.get('file_link', '')).split(", ")
+                    valid_links = [l.strip() for l in raw_links if l.strip().startswith("http")]
                     if valid_links:
                         for i, link in enumerate(valid_links):
-                            st.link_button(f"Open Resource {i+1}", link, use_container_width=True)
+                            st.link_button(f"📥 Open PDF {i+1}", link, use_container_width=True)
                     else:
-                        st.caption("No PDFs/Files uploaded.")
+                        st.caption("No PDFs available.")
 
                 with col_vid:
                     st.write("**🎥 Video Lesson**")
@@ -100,62 +97,53 @@ def render_modules(school):
                     if vid_url.startswith("http"):
                         st.video(vid_url)
                     else:
-                        st.info("No video lecture provided.")
+                        st.info("No video provided.")
                 st.markdown('</div>', unsafe_allow_html=True)
 
-                # --- PART 2: COMPACT 4-TIER DIAGNOSTIC ---
+                # --- 2. THE 4-TIER DIAGNOSTIC GRID ---
                 st.markdown("---")
-                st.subheader("🧪 Diagnostic Assessment")
-                
-                # Fetching question from normalized 'q_text'
-                q_body = row.get('q_text', 'No question provided.')
-                st.markdown(f"<div class='question-box'>Q: {q_body}</div>", unsafe_allow_html=True)
+                st.subheader("🧪 4-Tier Concept Check")
                 
                 
-
-                with st.form(key=f"eval_{idx}"):
-                    # Compressed Grid Layout
-                    r1_c1, r1_c2 = st.columns(2)
-                    # Mapping options dynamically
+                
+                q_text = row.get('q_text', row.get('question_text', 'No question content found.'))
+                st.markdown(f"<div class='question-box'>Q: {q_text}</div>", unsafe_allow_html=True)
+                
+                with st.form(key=f"diag_form_{idx}"):
+                    # ROW 1: T1 & T2
+                    r1c1, r1c2 = st.columns(2)
                     opts = [row.get('oa'), row.get('ob'), row.get('oc'), row.get('od')]
-                    opts = [o for o in opts if o] # Remove empty strings
+                    opts = [o for o in opts if o] # Remove empty slots
                     
-                    t1 = r1_c1.radio("Tier 1: Answer Choice", opts)
-                    t2 = r1_c2.select_slider("Tier 2: Confidence level", ["Unsure", "Sure", "Very Sure"])
+                    t1 = r1c1.radio("Tier 1: Answer Choice", opts)
+                    t2 = r1c2.select_slider("Tier 2: Confidence in Answer", ["Unsure", "Sure", "Very Sure"])
                     
-                    r2_c1, r2_c2 = st.columns([2, 1])
-                    t3 = r2_c1.text_area("Tier 3: Reasoning (Briefly explain your choice)")
-                    t4 = r2_c2.select_slider("Tier 4: Reasoning Confidence", ["Unsure", "Sure", "Very Sure"])
+                    # ROW 2: T3 & T4
+                    r2c1, r2c2 = st.columns([2, 1])
+                    t3 = r2c1.text_area("Tier 3: Reasoning (Why did you choose this?)")
+                    t4 = r2c2.select_slider("Tier 4: Reasoning Confidence", ["Unsure", "Sure", "Very Sure"])
                     
-                    if st.form_submit_button("Submit & Activate Tutor"):
-                        # Use sub_title as the module_id for tracking
-                        topic_id = row.get('sub_title', 'Unknown')
-                        log_assessment(st.session_state.user['User_ID'], school, topic_id, t1, t2, t3, t4, "Logged", "N/A")
-                        
-                        # Store session data to unlock Tutor
-                        st.session_state.current_topic = topic_id
+                    if st.form_submit_button("Submit & Unlock AI Tutor"):
+                        t_id = row.get('sub_title', row.get('concept_(sub_title)', 'Unknown'))
+                        log_assessment(st.session_state.user['User_ID'], school, t_id, t1, t2, t3, t4, "Complete", "")
+                        st.session_state.current_topic = t_id
                         st.session_state.logic_tree = row.get('socratic_tree', '')
-                        st.success(f"✅ Success! Socratic Tutor unlocked for {topic_id}.")
-                        log_temporal_trace(st.session_state.user['User_ID'], "SUBMITTED_ASSESSMENT", topic_id)
+                        st.success(f"✅ Assessment Saved! Unlock the AI Tutor for {t_id}.")
+                        log_temporal_trace(st.session_state.user['User_ID'], "SUBMITTED_DIAGNOSTIC", t_id)
 
     except Exception as e:
-        st.error(f"⚠️ Dashboard Display Error: {e}")
+        st.error(f"Display Error: {e}")
 
 def render_ai_chat(school):
     if school != "School A":
-        st.warning("The Socratic AI is available for the Experimental Group only.")
+        st.warning("The AI Tutor is currently enabled for Group A only.")
         return
-        
     if 'current_topic' not in st.session_state:
-        st.info("👋 **Hello!** Please complete the Diagnostic Question in 'Learning Modules' first to start a conversation with the AI Tutor.")
+        st.info("👋 Please complete a diagnostic question in 'Learning Modules' first.")
         return
 
     st.header(f"🤖 Socratic Tutor: {st.session_state.current_topic}")
-    st.caption("I help you think through the problem rather than giving you the answer.")
-
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
+    if "messages" not in st.session_state: st.session_state.messages = []
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.markdown(m["content"])
 
@@ -165,15 +153,7 @@ def render_ai_chat(school):
         
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
         model = genai.GenerativeModel('gemini-1.5-pro')
-        
-        # Build context for the AI
-        context = f"""
-        You are a Socratic Tutor for Grade 10 Chemistry.
-        Current Topic: {st.session_state.current_topic}
-        Teacher's Instructional Goal: {st.session_state.logic_tree}
-        Rules: Do not provide direct answers. Ask guiding questions to fix misconceptions.
-        Student says: {prompt}
-        """
+        context = f"Topic: {st.session_state.current_topic}. Teacher Logic: {st.session_state.logic_tree}. Student input: {prompt}."
         
         response = model.generate_content(context)
         with st.chat_message("assistant"):
@@ -181,15 +161,13 @@ def render_ai_chat(school):
             st.session_state.messages.append({"role": "assistant", "content": response.text})
 
 def render_progress(uid):
-    st.header("📈 My Progress Tracker")
+    st.header("📈 Growth Timeline")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        logs_df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
-        user_df = logs_df[logs_df['User_ID'].astype(str) == str(uid)]
+        df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
+        user_df = df[df['User_ID'].astype(str) == str(uid)]
         if not user_df.empty:
-            st.plotly_chart(px.line(user_df, x="Timestamp", y="Tier_2", title="Confidence Progression", markers=True))
-        else:
-            st.info("No data yet. Complete your first module to see your growth chart!")
-    except:
-        st.error("Analytics engine currently unavailable.")
+            st.plotly_chart(px.line(user_df, x="Timestamp", y="Tier_2", title="Confidence Tracker", markers=True))
+        else: st.info("Finish your first module to see your chart!")
+    except: st.error("Progress engine offline.")
