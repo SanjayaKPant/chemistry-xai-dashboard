@@ -2,16 +2,27 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import google.generativeai as genai
+# Use this to call functions from database_manager.py
 from database_manager import get_gspread_client, log_assessment, log_temporal_trace
 
 def show():
     if 'user' not in st.session_state: return
     user = st.session_state.user
+    # Ensure group matches the sheet (e.g., "School A") 
     student_group = str(user.get('Group', 'School A')).strip()
     
+    st.markdown("""
+        <style>
+        .metric-card { background: white; padding: 15px; border-radius: 10px; border: 1px solid #eee; text-align: center; }
+        .instruction-container { background: #f0f7ff; padding: 20px; border-radius: 12px; border-left: 6px solid #007bff; margin-bottom: 20px; }
+        .sub-title-text { color: #007bff; font-weight: bold; font-size: 1.3rem; margin-bottom: 5px;}
+        .objective-text { color: #555; font-style: italic; margin-bottom: 15px; display: block; }
+        .question-box { background: #fffdf0; padding: 15px; border-radius: 8px; border: 1px solid #ffeeba; margin-top: 10px; font-weight: 500; }
+        </style>
+    """, unsafe_allow_html=True)
+
     st.sidebar.title(f"🎓 {user.get('Name')}")
-    st.sidebar.info(f"Group: {student_group}")
-    
+    st.sidebar.info(f"Assigned Group: {student_group}")
     menu = ["🏠 Dashboard", "📚 Learning Modules", "🤖 Socratic Tutor", "📈 My Progress"]
     choice = st.sidebar.radio("Navigation", menu)
 
@@ -26,94 +37,116 @@ def show():
 
 def render_dashboard(user, group):
     st.title(f"🚀 Student Command Center")
-    st.info(f"Welcome! You are currently viewing modules for **{group}**.")
-    # Add a visual reminder of the 4-tier process
-    
+    m1, m2, m3, m4 = st.columns(4)
+    with m1: st.markdown(f'<div class="metric-card"><h3>Group</h3><p>{group}</p></div>', unsafe_allow_html=True)
+    with m2: st.markdown('<div class="metric-card"><h3>Course</h3><p>Chemistry 10</p></div>', unsafe_allow_html=True)
+    with m3: st.markdown('<div class="metric-card"><h3>Status</h3><p>Active</p></div>', unsafe_allow_html=True)
+    with m4: st.markdown('<div class="metric-card"><h3>Task</h3><p>Diagnostic</p></div>', unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.subheader("📢 Teacher's Guidance")
+    st.info("💡 **Welcome!** Please complete the Diagnostic Question in 'Learning Modules' to unlock the AI Tutor.")
 
 def render_modules(student_group):
     st.header("📚 Learning Modules")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        ws = sh.worksheet("Instructional_Materials")
-        df = pd.DataFrame(ws.get_all_records())
+        # get_all_records() automatically uses the first row as keys 
+        data = sh.worksheet("Instructional_Materials").get_all_records()
+        df = pd.DataFrame(data)
 
         if df.empty:
-            st.warning("No data found in the sheet.")
+            st.warning("No modules have been deployed yet.")
             return
 
-        # --- EXACT MAPPING TO YOUR GOOGLE SHEET ---
-        # We filter where the 'Group' column matches the student's group
+        # Filtering logic: Must match "Group" column in CSV 
         my_lessons = df[df['Group'].str.strip() == student_group]
 
         if my_lessons.empty:
-            st.error(f"No modules assigned to {student_group} yet.")
-            st.write("Teacher has assigned modules to:", df['Group'].unique().tolist())
+            st.error(f"No modules assigned to {student_group}.")
             return
 
         for idx, row in my_lessons.iterrows():
             with st.container():
-                st.subheader(f"📖 {row.get('Main_Title')}")
-                st.markdown(f"**Topic:** {row.get('Sub_Title')}")
-                
-                # 1. INSTRUCTIONAL LINKS (PDF & VIDEO)
-                st.markdown("### 📦 Learning Materials")
-                c1, c2 = st.columns(2)
-                
-                # Match: 'File_Links (PDF/Images)'
-                pdf_link = str(row.get('File_Links (PDF/Images)', '')).strip()
-                if pdf_link.startswith("http"):
-                    c1.link_button("📂 View Study PDF", pdf_link, use_container_width=True)
-                
-                # Match: 'Video_Links'
-                vid_link = str(row.get('Video_Links', '')).strip()
-                if vid_link.startswith("http"):
-                    c2.video(vid_link)
+                st.markdown(f"## {row.get('Main_Title')}")
+                st.markdown(f"<div class='sub-title-text'>{row.get('Sub_Title')}</div>", unsafe_allow_html=True)
+                st.markdown(f"<span class='objective-text'>🎯 {row.get('Learning_Objectives')}</span>", unsafe_allow_html=True)
 
-                # 2. 4-TIER QUESTION
-                st.divider()
-                st.markdown("### 🧪 Diagnostic Question")
+                # --- PART 1: INSTRUCTIONAL MATERIALS ---
+                st.markdown('<div class="instruction-container">', unsafe_allow_html=True)
+                st.write("#### 📦 Lesson Resources")
+                col_file, col_vid = st.columns([1, 1.2])
                 
-                # Match: 'Diagnostic_Question'
-                question_body = row.get('Diagnostic_Question', 'Question text missing')
-                st.info(question_body)
+                with col_file:
+                    st.write("**📄 Reference Materials**")
+                    # Matching column: 'File_Links (PDF/Images)' 
+                    f_link = str(row.get('File_Links (PDF/Images)', '')).strip()
+                    if f_link.startswith("http"):
+                        st.link_button("Open Resource", f_link, use_container_width=True)
+                    else:
+                        st.caption("No PDFs uploaded.")
+
+                with col_vid:
+                    st.write("**🎥 Video Lesson**")
+                    # Matching column: 'Video_Links' 
+                    vid_url = str(row.get('Video_Links', '')).strip()
+                    if vid_url.startswith("http"):
+                        st.video(vid_url)
+                    else:
+                        st.info("No video lecture provided.")
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                # --- PART 2: 4-TIER DIAGNOSTIC ---
+                st.markdown("---")
+                st.subheader("🧪 4-Tier Diagnostic Check")
                 
-                with st.form(key=f"tier_form_{idx}"):
-                    # Match: Option_A, Option_B, etc.
+                # Matching column: 'Diagnostic_Question' 
+                q_body = row.get('Diagnostic_Question', 'No question text provided.')
+                st.markdown(f"<div class='question-box'>Q: {q_body}</div>", unsafe_allow_html=True)
+                
+                with st.form(key=f"eval_{idx}"):
+                    r1_c1, r1_c2 = st.columns(2)
+                    # Matching columns: Option_A, Option_B, Option_C, Option_D 
                     opts = [row.get('Option_A'), row.get('Option_B'), row.get('Option_C'), row.get('Option_D')]
-                    opts = [o for o in opts if o] # Clean empty options
+                    opts = [str(o) for o in opts if o]
                     
-                    col_a, col_b = st.columns(2)
-                    t1 = col_a.radio("Tier 1: Select Answer", opts)
-                    t2 = col_b.select_slider("Tier 2: Confidence", ["Unsure", "Sure", "Very Sure"])
+                    t1 = r1_c1.radio("Tier 1: Answer Choice", opts)
+                    t2 = r1_c2.select_slider("Tier 2: Confidence level", ["Unsure", "Sure", "Very Sure"])
                     
-                    t3 = st.text_area("Tier 3: Reasoning (Explain your choice)")
-                    t4 = st.select_slider("Tier 4: Reasoning Confidence", ["Unsure", "Sure", "Very Sure"])
+                    r2_c1, r2_c2 = st.columns([2, 1])
+                    t3 = r2_c1.text_area("Tier 3: Reasoning (Briefly explain your choice)")
+                    t4 = r2_c2.select_slider("Tier 4: Reasoning Confidence", ["Unsure", "Sure", "Very Sure"])
                     
                     if st.form_submit_button("Submit & Unlock Tutor"):
-                        log_assessment(st.session_state.user['User_ID'], student_group, row.get('Sub_Title'), t1, t2, t3, t4, "Complete", "")
-                        st.session_state.current_topic = row.get('Sub_Title')
-                        st.session_state.logic_tree = row.get('Socratic_Tree')
-                        st.success("✅ Logged! Now go to the Socratic Tutor tab.")
+                        # Log using database_manager functions
+                        log_assessment(st.session_state.user['User_ID'], student_group, row['Sub_Title'], t1, t2, t3, t4, "Submitted", "")
+                        
+                        # Set Socratic Context
+                        st.session_state.current_topic = row['Sub_Title']
+                        # Matching column: 'Socratic_Tree' 
+                        st.session_state.logic_tree = row['Socratic_Tree']
+                        
+                        st.success(f"✅ Success! AI Tutor unlocked for {row['Sub_Title']}.")
+                        log_temporal_trace(st.session_state.user['User_ID'], "SUBMITTED_DIAGNOSTIC", row['Sub_Title'])
 
     except Exception as e:
-        st.error(f"Error reading Sheet: {e}")
+        st.error(f"⚠️ Error loading modules: {e}")
 
 def render_ai_chat(school):
-    if "School A" not in school and "Exp_A" not in school:
-        st.warning("The Socratic AI Tutor is currently enabled for Experimental Groups only.")
+    if "School A" not in school:
+        st.warning("The Socratic AI Tutor is currently enabled for Experimental Group A only.")
         return
         
     if 'current_topic' not in st.session_state:
-        st.info("👋 **Hello Scientist!** Please complete a diagnostic question in 'Learning Modules' so I know which chemistry concept we are exploring today.")
+        st.info("👋 **Welcome Scientist!** Complete a diagnostic question first to start the Socratic session.")
         return
 
     st.header(f"🤖 Socratic Tutor: {st.session_state.current_topic}")
     
-    # Initialize Chat History
     if "messages" not in st.session_state:
         st.session_state.messages = [
-            {"role": "assistant", "content": f"I see we are discussing '{st.session_state.current_topic}'. Based on your diagnostic response, how would you explain the underlying chemical principle here?"}
+            {"role": "assistant", "content": f"I see we are discussing '{st.session_state.current_topic}'. Based on your reasoning, what do you think would happen if we changed the atomic number?"}
         ]
 
     for m in st.session_state.messages:
@@ -123,44 +156,40 @@ def render_ai_chat(school):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
         
-        # --- SCIENTIFIC PEDAGOGY ENGINE ---
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
         model = genai.GenerativeModel('gemini-1.5-pro')
         
-        # This is the "Journal-Grade" Socratic System Prompt
+        # High-rank journal pedagogical prompt
         system_instruction = f"""
-        YOU ARE: A world-class Socratic Chemistry Tutor specializing in the Grade 10 chapter 'Classification of Elements'.
-        CONTEXT: The student is working on {st.session_state.current_topic}.
-        TEACHER'S LOGIC TREE: {st.session_state.logic_tree}
+        YOU ARE: A world-class Socratic Chemistry Tutor for Grade 10.
+        TOPIC: {st.session_state.current_topic}.
+        TEACHER'S LOGIC: {st.session_state.logic_tree}
         
-        PEDAGOGICAL RULES (Strict):
-        1. NEVER give the answer. If the student asks "What is the answer?", respond with a question about the periodic trend or sub-shell energy.
-        2. If the student has a misconception (e.g., thinks atomic weight is the basis of modern law), ask them about isotopes.
-        3. Use textbook terminology: Aufbau principle, n+l rule, electronic configuration, periods, and groups.
-        4. When they get it right, don't just say "Correct." Ask "Why does that make sense based on the number of protons?"
-        5. Keep responses concise (under 3 sentences) to encourage more student input.
+        RULES:
+        1. NEVER give the answer directly.
+        2. Use the 'Classification of Elements' textbook terminology.
+        3. If the student has a misconception, ask a guiding question (Scaffolding).
+        4. Keep responses brief (under 3 sentences).
         """
-
-        full_prompt = f"{system_instruction}\n\nStudent says: {prompt}"
         
-        try:
-            response = model.generate_content(full_prompt)
-            with st.chat_message("assistant"):
-                st.markdown(response.text)
-                st.session_state.messages.append({"role": "assistant", "content": response.text})
-            
-            # Log this for your Research Data (Learning Analytics)
-            log_temporal_trace(st.session_state.user['User_ID'], "SOCRATIC_CHAT_INTERACTION", f"Topic: {st.session_state.current_topic}")
-        except Exception as e:
-            st.error("AI connection lost. Please check your API key.")
+        response = model.generate_content(f"{system_instruction}\nStudent: {prompt}")
+        with st.chat_message("assistant"):
+            st.markdown(response.text)
+            st.session_state.messages.append({"role": "assistant", "content": response.text})
+        
+        log_temporal_trace(st.session_state.user['User_ID'], "SOCRATIC_CHAT", st.session_state.current_topic)
 
 def render_progress(uid):
-    st.header("📈 Growth Timeline")
+    st.header("📈 My Progress Tracker")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        # Match 'Assessment_Logs' worksheet
         df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
         user_df = df[df['User_ID'].astype(str) == str(uid)]
         if not user_df.empty:
-            st.plotly_chart(px.line(user_df, x="Timestamp", y="Tier_2", markers=True))
-    except: st.error("Analytics offline.")
+            st.plotly_chart(px.line(user_df, x="Timestamp", y="Tier_2", title="Confidence Progression", markers=True))
+        else:
+            st.info("No data yet. Complete your first module to see your growth!")
+    except:
+        st.error("Analytics engine currently unavailable.")
