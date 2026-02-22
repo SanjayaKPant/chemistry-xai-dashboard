@@ -23,7 +23,7 @@ def get_gspread_client():
     creds = get_creds()
     return gspread.authorize(creds) if creds else None
 
-# --- LOGIN (The fix for your AttributeError) ---
+# --- LOGIN (Crucial Fix for AttributeError) ---
 def check_login(user_id):
     client = get_gspread_client()
     try:
@@ -34,7 +34,7 @@ def check_login(user_id):
         return match.iloc[0].to_dict() if not match.empty else None
     except: return None
 
-# --- DRIVE UPLOADER (Updated for Shared Drives) ---
+# --- DRIVE: UPLOAD (Shared Drive Support) ---
 def upload_to_drive(uploaded_file):
     FOLDER_ID = "0AJAe9AoSTt6-Uk9PVA" 
     try:
@@ -45,9 +45,7 @@ def upload_to_drive(uploaded_file):
         f = service.files().create(body=meta, media_body=media, fields='id, webViewLink', supportsAllDrives=True).execute()
         service.permissions().create(fileId=f.get('id'), body={'type': 'anyone', 'role': 'reader'}, supportsAllDrives=True).execute()
         return f.get('webViewLink')
-    except Exception as e:
-        st.error(f"Drive Error: {e}")
-        return ""
+    except: return ""
 
 # --- DATA SAVING ---
 def save_bulk_concepts(teacher_id, group, main_title, data):
@@ -55,11 +53,14 @@ def save_bulk_concepts(teacher_id, group, main_title, data):
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         ws = sh.worksheet("Instructional_Materials")
-        row = [datetime.now().strftime("%Y-%m-%d %H:%M:%S"), teacher_id, group, main_title, 
-               data.get('sub_title',''), data.get('objectives',''), data.get('file_link',''), 
-               data.get('video_link',''), data.get('q_text',''), data.get('oa',''), 
-               data.get('ob',''), data.get('oc',''), data.get('od',''), 
-               data.get('correct',''), data.get('socratic_tree','')]
+        # Explicit column mapping to avoid 'removed' features
+        row = [
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"), teacher_id, group, main_title, 
+            data.get('sub_title',''), data.get('objectives',''), data.get('file_link',''), 
+            data.get('video_link',''), data.get('q_text',''), data.get('oa',''), 
+            data.get('ob',''), data.get('oc',''), data.get('od',''), 
+            data.get('correct',''), data.get('socratic_tree','')
+        ]
         ws.append_row(row)
         return True
     except: return False
@@ -68,7 +69,6 @@ def save_assignment(teacher_id, group, title, desc, file_url):
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        # Ensure you have a worksheet named 'Assignments' in your Google Sheet
         ws = sh.worksheet("Assignments")
         ws.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), teacher_id, group, title, desc, file_url])
         return True
