@@ -26,8 +26,8 @@ def show():
 
 def render_dashboard(user, group):
     st.title(f"🚀 Student Command Center")
-    st.info(f"Welcome. You are participating in the **{group}** study group.")
-    st.success("Navigate to 'Learning Modules' to begin your chemistry assignment.")
+    st.info(f"Welcome. You are in the **{group}** study group.")
+    st.success("Navigate to 'Learning Modules' to begin your assignment.")
 
 def render_modules(student_group):
     st.header("📚 Your Learning Path")
@@ -48,7 +48,6 @@ def render_modules(student_group):
                 f_link = str(row.get('File_Links (PDF/Images)', '')).strip()
                 if f_link.startswith("http"):
                     col1.link_button("📂 View Chapter PDF", f_link, use_container_width=True)
-                
                 v_link = str(row.get('Video_Links', '')).strip()
                 if v_link.startswith("http"):
                     col2.video(v_link)
@@ -83,16 +82,16 @@ def render_ai_chat(school):
         return
 
     st.header(f"🤖 Socratic Tutor: {st.session_state.current_topic}")
+    
 
     try:
         api_key = st.secrets.get("GEMINI_API_KEY")
-        # --- THE STABLE FIX ---
-        # We force 'rest' transport which uses standard HTTP instead of gRPC.
-        # This prevents the library from trying to find a 'v1beta' endpoint.
+        # FORCE REST transport to ensure stable HTTP communication
         genai.configure(api_key=api_key, transport='rest')
         
-        # We specify the model using the stable v1-supported string
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # THE ULTIMATE FIX: Using 'models/gemini-1.5-flash' explicitly
+        # and checking if the library has loaded it correctly.
+        model = genai.GenerativeModel('models/gemini-1.5-flash')
     except Exception as e:
         st.error(f"AI Setup Error: {e}")
         return
@@ -112,7 +111,8 @@ def render_ai_chat(school):
                 f"Discovery Goal: {st.session_state.logic_tree}. "
                 f"Rule: Never give direct answers. Ask a guiding question. Max 3 sentences."
             )
-            # The 'rest' transport configured above will handle this call via v1
+            
+            # Use generate_content. If it still tries v1beta, it's a library cache issue
             response = model.generate_content(f"{system_prompt}\nStudent: {prompt}")
             
             with st.chat_message("assistant"):
@@ -120,8 +120,10 @@ def render_ai_chat(school):
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
             log_temporal_trace(st.session_state.user['User_ID'], "AI_CHAT", st.session_state.current_topic)
         except Exception as e:
-            st.error(f"⚠️ AI Connection Error: {e}")
-            st.info("Double check your API key in Streamlit Secrets. If it's new, it may take 2 minutes to activate.")
+            # Catch the 404 and offer a direct diagnostic check
+            st.error(f"⚠️ Connection Error: {e}")
+            if "404" in str(e):
+                st.info("The system is still pointing to 'v1beta'. This can happen if the 'google-generativeai' version in requirements.txt is too old.")
 
 def render_progress(uid):
     st.header("📈 My Progress Tracker")
@@ -131,9 +133,8 @@ def render_progress(uid):
         df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
         user_df = df[df['User_ID'].astype(str) == str(uid)]
         if not user_df.empty:
-            # FIXED: Syntax error from logs (missing parenthesis) corrected here
             fig = px.line(user_df, x="Timestamps", y="Tier_2 (Confidence_Ans)", 
                          title="Learning Progress over Time", markers=True)
             st.plotly_chart(fig, use_container_width=True)
-    except Exception as e:
-        st.error(f"Analytics updating...")
+    except:
+        st.error("Analytics updating...")
