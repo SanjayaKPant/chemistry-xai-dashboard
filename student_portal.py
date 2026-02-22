@@ -26,8 +26,8 @@ def show():
 
 def render_dashboard(user, group):
     st.title(f"🚀 Student Command Center")
-    st.info(f"Welcome. You are in the **{group}** study group.")
-    st.success("Navigate to 'Learning Modules' to begin your assignment.")
+    st.info(f"Welcome. You are participating in the **{group}** study group.")
+    st.success("Navigate to 'Learning Modules' to begin your chemistry assignment.")
 
 def render_modules(student_group):
     st.header("📚 Your Learning Path")
@@ -69,8 +69,7 @@ def render_modules(student_group):
                         log_assessment(st.session_state.user['User_ID'], student_group, row.get('Sub_Title'), t1, t2, t3, t4, "Complete", "")
                         st.session_state.current_topic = row.get('Sub_Title')
                         st.session_state.logic_tree = row.get('Socratic_Tree')
-                        st.success("✅ Logged! Now open the AI Tutor tab.")
-
+                        st.success("✅ Diagnostic Logged! You can now use the AI Tutor.")
     except Exception as e:
         st.error(f"⚠️ System Error: {e}")
 
@@ -86,10 +85,10 @@ def render_ai_chat(school):
 
     try:
         api_key = st.secrets.get("GEMINI_API_KEY")
-        # Back to basics: The simplest configuration possible
         genai.configure(api_key=api_key)
         
-        # We use the 'models/' prefix which helps some library versions find the stable path
+        # KEY CHANGE: Using the full path 'models/gemini-1.5-flash' 
+        # avoids the automatic v1beta redirection in most library versions.
         model = genai.GenerativeModel('models/gemini-1.5-flash')
     except Exception as e:
         st.error(f"AI Setup Error: {e}")
@@ -101,18 +100,17 @@ def render_ai_chat(school):
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.markdown(m["content"])
 
-    if prompt := st.chat_input("Explain your chemistry logic..."):
+    if prompt := st.chat_input("Explain your chemistry reasoning..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
         try:
-            system_prompt = f"""
-            ROLE: PhD Chemistry Socratic Tutor.
-            TOPIC: {st.session_state.current_topic}.
-            RESEARCH GOAL: {st.session_state.logic_tree}.
-            RULES: Never give answers. Ask guiding questions. Max 3 sentences.
-            """
-            
-            # Simple call without complex arguments
+            # PhD Socratic Prompting
+            system_prompt = (
+                f"Act as a Socratic Tutor for Grade 10 Chemistry. "
+                f"Topic: {st.session_state.current_topic}. "
+                f"Goal: Lead student to discover {st.session_state.logic_tree}. "
+                f"Rule: Never give the answer. Ask a follow-up question. Max 3 sentences."
+            )
             response = model.generate_content(f"{system_prompt}\nStudent: {prompt}")
             
             with st.chat_message("assistant"):
@@ -121,6 +119,7 @@ def render_ai_chat(school):
             log_temporal_trace(st.session_state.user['User_ID'], "AI_CHAT", st.session_state.current_topic)
         except Exception as e:
             st.error(f"⚠️ Connection Error: {e}")
+            st.info("Wait 10 seconds and try again—your API key may still be synchronizing.")
 
 def render_progress(uid):
     st.header("📈 My Progress Tracker")
@@ -130,7 +129,8 @@ def render_progress(uid):
         df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
         user_df = df[df['User_ID'].astype(str) == str(uid)]
         if not user_df.empty:
-            fig = px.line(user_df, x="Timestamps", y="Tier_2 (Confidence_Ans)", title="Confidence Growth", markers=True)
+            fig = px.line(user_df, x="Timestamps", y="Tier_2 (Confidence_Ans)", 
+                         title="Your Learning Journey", markers=True)
             st.plotly_chart(fig, use_container_width=True)
-    except:
-        st.error("Analytics updating...")
+    except Exception as e:
+        st.error(f"Analytics updating...")
