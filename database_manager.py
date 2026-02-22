@@ -66,3 +66,11 @@ def log_assessment(user_id, group, module_id, t1, t2, t3, t4, diag, misc):
         ws.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user_id, module_id, t1, t2, t3, t4, diag, misc, group])
         return True
     except: return False
+
+def log_temporal_trace(user_id, event, details=""):
+    try:
+        client = get_gspread_client()
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        ws = sh.worksheet("Temporal_Traces")
+        ws.append_row([user_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), event, details])
+    except: pass
