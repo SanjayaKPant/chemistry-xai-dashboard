@@ -99,34 +99,35 @@ def render_ai_chat(school):
         with st.chat_message("user"): st.markdown(prompt)
         
         try:
-            # Check for both possible secret names
+            # Flexible Key Retrieval
             api_key = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
             genai.configure(api_key=api_key)
             
-            # --- MODEL FIX ---
-            # Using 'gemini-1.5-flash' which corresponds to the Flash family
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            
+            # UNIVERSAL FALLBACK LOGIC
+            # We try the most likely name first, then fall back to the basic 'gemini-pro'
+            try:
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                test_res = model.generate_content("test") # Quick handshake
+            except:
+                model = genai.GenerativeModel('gemini-pro')
+
             system_prompt = f"""
-            YOU ARE: A PhD Chemistry Socratic Tutor for Grade 10.
-            TOPIC: {st.session_state.current_topic} (Classification of Elements).
-            TEACHER LOGIC: {st.session_state.logic_tree}
-            
-            RULES: 
-            1. Never give answers. Use Socratic scaffolding.
-            2. If they mention Atomic Weight, ask about Mendeleev vs Modern Law.
-            3. Max 3 sentences.
+            ACT AS: A PhD Chemistry Socratic Tutor.
+            PEDAGOGICAL GOAL: Lead student to discover {st.session_state.logic_tree}.
+            TOPIC: {st.session_state.current_topic}.
+            RULES: No direct answers. Max 3 sentences. Use textbook terminology.
             """
             
             response = model.generate_content(f"{system_prompt}\nStudent: {prompt}")
+            
             with st.chat_message("assistant"):
                 st.markdown(response.text)
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
             
-            log_temporal_trace(st.session_state.user['User_ID'], "AI_CONVERSATION", st.session_state.current_topic)
+            log_temporal_trace(st.session_state.user['User_ID'], "AI_CHAT_TURN", st.session_state.current_topic)
             
         except Exception as e:
-            st.error(f"AI Connection Error: {e}")
+            st.error(f"⚠️ Technical Connection Error: {e}")
 
 def render_progress(uid):
     st.header("📈 My Progress")
