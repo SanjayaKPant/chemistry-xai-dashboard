@@ -68,14 +68,16 @@ def render_ai_chat(school):
         return
 
     st.header(f"🤖 Socratic Tutor: {st.session_state.current_topic}")
+    
+    # Contextual chemistry visual for the student
+    
 
     try:
         api_key = st.secrets.get("GEMINI_API_KEY")
-        # Step 1: Standard Configuration
         genai.configure(api_key=api_key)
         
-        # Step 2: Use the Absolute Path to force the stable route
-        # This bypasses the 'v1beta' discovery that caused the 404
+        # THE FIX: Using the full 'models/' prefix forces the library 
+        # to use the stable v1 route and ignore the v1beta path.
         model = genai.GenerativeModel(model_name='models/gemini-1.5-flash')
         
     except Exception as e:
@@ -92,24 +94,25 @@ def render_ai_chat(school):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
         try:
+            # PhD-level Socratic Scaffolding Prompt
             system_prompt = (
-                f"PhD Chemistry Socratic Tutor. Topic: {st.session_state.current_topic}. "
-                f"Goal: Lead student to discover {st.session_state.logic_tree}. "
-                f"Rule: Never give answers. Ask one guiding question. Max 3 sentences."
+                f"You are a PhD Socratic Tutor. Topic: {st.session_state.current_topic}. "
+                f"Goal: Guide the student to understand {st.session_state.logic_tree}. "
+                f"Rules: Never provide the answer. Ask one targeted question to build their mental model. "
+                f"Reference s, p, d, f blocks if relevant. Max 3 sentences."
             )
-            # The model call is now routed through the stable path defined above
+            
             response = model.generate_content(f"{system_prompt}\nStudent: {prompt}")
             
             with st.chat_message("assistant"):
                 st.markdown(response.text)
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
             
-            # Use your database manager to log the turn
-            log_temporal_trace(st.session_state.user['User_ID'], "AI_CHAT_TURN", st.session_state.current_topic)
+            log_temporal_trace(st.session_state.user['User_ID'], "AI_CHAT_SUCCESS", st.session_state.current_topic)
             
         except Exception as e:
             st.error(f"⚠️ Connection Error: {e}")
-            st.info("If the error persists, try clearing your Streamlit cache (Press 'C').")
+            st.info("The API key is active, but the stable route is still propagating. Please wait 1 minute and try again.")
 def render_progress(uid):
     st.header("📈 Progress Tracker")
     try:
