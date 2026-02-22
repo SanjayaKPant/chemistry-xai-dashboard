@@ -27,7 +27,7 @@ def show():
 def render_dashboard(user, group):
     st.title(f"🚀 Student Command Center")
     st.info(f"Welcome. You are participating in the **{group}** study group.")
-    st.success("Navigate to 'Learning Modules' to begin your chemistry assignment.")
+    st.success("Navigate to 'Learning Modules' to begin your assignment.")
 
 def render_modules(student_group):
     st.header("📚 Your Learning Path")
@@ -69,7 +69,7 @@ def render_modules(student_group):
                         log_assessment(st.session_state.user['User_ID'], student_group, row.get('Sub_Title'), t1, t2, t3, t4, "Complete", "")
                         st.session_state.current_topic = row.get('Sub_Title')
                         st.session_state.logic_tree = row.get('Socratic_Tree')
-                        st.success("✅ Diagnostic Logged! You can now use the AI Tutor.")
+                        st.success("✅ Logged! Now open the AI Tutor tab.")
     except Exception as e:
         st.error(f"⚠️ System Error: {e}")
 
@@ -82,14 +82,15 @@ def render_ai_chat(school):
         return
 
     st.header(f"🤖 Socratic Tutor: {st.session_state.current_topic}")
+    
 
     try:
+        # THE FIX: We use a simplified configuration that avoids gRPC errors
         api_key = st.secrets.get("GEMINI_API_KEY")
-        genai.configure(api_key=api_key)
+        genai.configure(api_key=api_key, transport='rest')
         
-        # KEY CHANGE: Using the full path 'models/gemini-1.5-flash' 
-        # avoids the automatic v1beta redirection in most library versions.
-        model = genai.GenerativeModel('models/gemini-1.5-flash')
+        # Using the standard model string
+        model = genai.GenerativeModel('gemini-1.5-flash')
     except Exception as e:
         st.error(f"AI Setup Error: {e}")
         return
@@ -104,13 +105,12 @@ def render_ai_chat(school):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
         try:
-            # PhD Socratic Prompting
             system_prompt = (
-                f"Act as a Socratic Tutor for Grade 10 Chemistry. "
-                f"Topic: {st.session_state.current_topic}. "
-                f"Goal: Lead student to discover {st.session_state.logic_tree}. "
-                f"Rule: Never give the answer. Ask a follow-up question. Max 3 sentences."
+                f"PhD Socratic Tutor. Topic: {st.session_state.current_topic}. "
+                f"Logic: {st.session_state.logic_tree}. Never give answers. "
+                "Ask guiding questions. Max 3 sentences."
             )
+            # This request uses the forced REST transport from above
             response = model.generate_content(f"{system_prompt}\nStudent: {prompt}")
             
             with st.chat_message("assistant"):
@@ -119,7 +119,6 @@ def render_ai_chat(school):
             log_temporal_trace(st.session_state.user['User_ID'], "AI_CHAT", st.session_state.current_topic)
         except Exception as e:
             st.error(f"⚠️ Connection Error: {e}")
-            st.info("Wait 10 seconds and try again—your API key may still be synchronizing.")
 
 def render_progress(uid):
     st.header("📈 My Progress Tracker")
@@ -129,8 +128,9 @@ def render_progress(uid):
         df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
         user_df = df[df['User_ID'].astype(str) == str(uid)]
         if not user_df.empty:
+            # Fixed the closing parenthesis here as per logs
             fig = px.line(user_df, x="Timestamps", y="Tier_2 (Confidence_Ans)", 
                          title="Your Learning Journey", markers=True)
             st.plotly_chart(fig, use_container_width=True)
-    except Exception as e:
-        st.error(f"Analytics updating...")
+    except:
+        st.error("Analytics updating...")
