@@ -76,6 +76,14 @@ def render_modules(student_group):
 
     except Exception as e:
         st.error(f"⚠️ System Error: {e}")
+    # DIAGNOSTIC TOOL: Run this once to find your model name
+try:
+    st.write("🔍 Searching for your available models...")
+    for m in genai.list_models():
+        if 'generateContent' in m.supported_generation_methods:
+            st.code(f"Supported Model: {m.name}")
+except Exception as e:
+    st.error(f"Could not list models: {e}")
 
 def render_ai_chat(school):
     if school not in ["School A", "Exp_A"]:
@@ -88,6 +96,20 @@ def render_ai_chat(school):
 
     st.header(f"🤖 Socratic Tutor: {st.session_state.current_topic}")
     
+    # 1. API Configuration with Version Force
+    try:
+        api_key = st.secrets.get("GEMINI_API_KEY")
+        # Forcing the use of the stable v1 API to avoid v1beta 404s
+        genai.configure(api_key=api_key, transport='rest') 
+        
+        # We try the specific flash model identifier first
+        # If it fails, we fall back to the most universal one
+        model_name = 'gemini-1.5-flash' 
+        model = genai.GenerativeModel(model_name)
+    except Exception as e:
+        st.error(f"Setup Error: {e}")
+        return
+
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
@@ -99,25 +121,19 @@ def render_ai_chat(school):
         with st.chat_message("user"): st.markdown(prompt)
         
         try:
-            # Flexible Key Retrieval
-            api_key = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
-            genai.configure(api_key=api_key)
-            
-            # UNIVERSAL FALLBACK LOGIC
-            # We try the most likely name first, then fall back to the basic 'gemini-pro'
-            try:
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                test_res = model.generate_content("test") # Quick handshake
-            except:
-                model = genai.GenerativeModel('gemini-pro')
-
+            # Socratic Prompt Engineering for Science Education Journal
             system_prompt = f"""
             ACT AS: A PhD Chemistry Socratic Tutor.
-            PEDAGOGICAL GOAL: Lead student to discover {st.session_state.logic_tree}.
+            CHAPTER: Classification of Elements.
             TOPIC: {st.session_state.current_topic}.
-            RULES: No direct answers. Max 3 sentences. Use textbook terminology.
+            PEDAGOGICAL GOAL: lead student to discover {st.session_state.logic_tree}.
+            RULES: 
+            1. NO answers. 
+            2. Ask about 'Electronic Configuration' or 'Atomic Number'.
+            3. Max 3 sentences. 
             """
             
+            # Requesting content using the stable method
             response = model.generate_content(f"{system_prompt}\nStudent: {prompt}")
             
             with st.chat_message("assistant"):
@@ -127,7 +143,8 @@ def render_ai_chat(school):
             log_temporal_trace(st.session_state.user['User_ID'], "AI_CHAT_TURN", st.session_state.current_topic)
             
         except Exception as e:
-            st.error(f"⚠️ Technical Connection Error: {e}")
+            st.error(f"⚠️ Connection Error: {e}")
+            st.info("If you see 'Model not found', check the diagnostic tool above for the correct name.")
 
 def render_progress(uid):
     st.header("📈 My Progress")
