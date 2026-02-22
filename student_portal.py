@@ -26,7 +26,7 @@ def show():
 
 def render_dashboard(user, group):
     st.title(f"🚀 Student Command Center")
-    st.info(f"Welcome. You are in the **{group}** study group.")
+    st.info(f"Welcome. You are participating in the **{group}** study group.")
     st.success("Navigate to 'Learning Modules' to begin your assignment.")
 
 def render_modules(student_group):
@@ -41,10 +41,12 @@ def render_modules(student_group):
         for idx, row in my_lessons.iterrows():
             with st.expander(f"📖 {row.get('Sub_Title')}", expanded=True):
                 col1, col2 = st.columns(2)
-                if str(row.get('File_Links (PDF/Images)', '')).startswith("http"):
-                    col1.link_button("📂 View Chapter PDF", row.get('File_Links (PDF/Images)'), use_container_width=True)
-                if str(row.get('Video_Links', '')).startswith("http"):
-                    col2.video(row.get('Video_Links'))
+                f_link = str(row.get('File_Links (PDF/Images)', '')).strip()
+                if f_link.startswith("http"):
+                    col1.link_button("📂 View Chapter PDF", f_link, use_container_width=True)
+                v_link = str(row.get('Video_Links', '')).strip()
+                if v_link.startswith("http"):
+                    col2.video(v_link)
 
                 st.divider()
                 st.subheader("🧪 4-Tier Diagnostic Check")
@@ -56,14 +58,14 @@ def render_modules(student_group):
                     c1, c2 = st.columns(2)
                     t1 = c1.radio("Tier 1: Answer", opts)
                     t2 = c2.select_slider("Tier 2: Confidence", ["Unsure", "Sure", "Very Sure"])
-                    t3 = st.text_area("Tier 3: Reasoning (Explain your chemistry logic)")
+                    t3 = st.text_area("Tier 3: Reasoning")
                     t4 = st.select_slider("Tier 4: Reasoning Confidence", ["Unsure", "Sure", "Very Sure"])
                     
                     if st.form_submit_button("Submit & Unlock AI"):
                         log_assessment(st.session_state.user['User_ID'], student_group, row.get('Sub_Title'), t1, t2, t3, t4, "Complete", "")
                         st.session_state.current_topic = row.get('Sub_Title')
                         st.session_state.logic_tree = row.get('Socratic_Tree')
-                        st.success("✅ Logged! Now you can talk to the AI.")
+                        st.success("✅ Logged! Now open the AI Tutor tab.")
     except Exception as e:
         st.error(f"⚠️ System Error: {e}")
 
@@ -78,48 +80,51 @@ def render_ai_chat(school):
     st.header(f"🤖 Socratic Tutor: {st.session_state.current_topic}")
     
 
+[Image of the periodic table showing s, p, d, and f blocks]
+
+
+    try:
+        api_key = st.secrets.get("GEMINI_API_KEY")
+        # --- THE NUCLEAR FIX ---
+        # We manually set the client to 'v1' to stop the v1beta 404 errors.
+        from google.api_core import client_options
+        options = client_options.ClientOptions(api_version='v1')
+        genai.configure(api_key=api_key, client_options=options)
+        
+        # We use a try-except block to fall back to Pro if Flash is restricted
+        try:
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            # Test simple generation
+            model.generate_content("ping") 
+        except:
+            model = genai.GenerativeModel('gemini-1.0-pro')
+            
+    except Exception as e:
+        st.error(f"AI Setup Error: {e}")
+        return
+
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.markdown(m["content"])
 
-    if prompt := st.chat_input("Ask about the classification of this element..."):
+    if prompt := st.chat_input("Ask about this element's configuration..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
-        
         try:
-            api_key = st.secrets.get("GEMINI_API_KEY")
-            
-            # FORCING VERSION 1 STABLE DIRECTLY
-            # We bypass the default discovery and force 'rest' mode which is strictly v1.
-            genai.configure(api_key=api_key, transport='rest')
-            
-            # We use the full model path to ensure no v1beta prefixing
-            model = genai.GenerativeModel('models/gemini-1.5-flash')
-            
-            system_prompt = f"""
-            ROLE: Grade 10 Chemistry Socratic Tutor.
-            TOPIC: {st.session_state.current_topic}.
-            RESEARCH GOAL: Lead student to discover {st.session_state.logic_tree}.
-            RULES: 
-            1. NEVER give a direct answer. 
-            2. If student is wrong, ask about the element's atomic number or block (s, p, d, f). 
-            3. Max 3 sentences.
-            """
-            
-            # The 'rest' transport ensures this call goes to the stable endpoint
+            system_prompt = (
+                f"PhD Chemistry Socratic Tutor. Topic: {st.session_state.current_topic}. "
+                f"Logic: {st.session_state.logic_tree}. Never give answers. Max 3 sentences."
+            )
             response = model.generate_content(f"{system_prompt}\nStudent: {prompt}")
             
             with st.chat_message("assistant"):
                 st.markdown(response.text)
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
-            
-            log_temporal_trace(st.session_state.user['User_ID'], "AI_CHAT_TURN", st.session_state.current_topic)
-            
+            log_temporal_trace(st.session_state.user['User_ID'], "AI_CHAT", st.session_state.current_topic)
         except Exception as e:
-            st.error(f"⚠️ Technical Connection Error: {e}")
-            st.info("If you see '404', your personal key is likely still restricted. Try 'gemini-1.0-pro' if this persists.")
+            st.error(f"⚠️ Connection Error: {e}")
 
 def render_progress(uid):
     st.header("📈 My Progress Tracker")
@@ -129,7 +134,8 @@ def render_progress(uid):
         df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
         user_df = df[df['User_ID'].astype(str) == str(uid)]
         if not user_df.empty:
-            fig = px.line(user_df, x="Timestamps", y="Tier_2 (Confidence_Ans)", title="Confidence Growth", markers=True)
+            fig = px.line(user_df, x="Timestamps", y="Tier_2 (Confidence_Ans)", 
+                         title="Learning Journey", markers=True)
             st.plotly_chart(fig, use_container_width=True)
     except:
         st.error("Analytics updating...")
