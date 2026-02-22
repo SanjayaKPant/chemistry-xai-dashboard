@@ -61,56 +61,55 @@ def render_modules(student_group):
 
 def render_ai_chat(school):
     if school not in ["School A", "Exp_A"]:
-        st.warning("Reserved for Experimental Group.")
+        st.warning("The Socratic AI Tutor is reserved for the Experimental Group.")
         return
     if 'current_topic' not in st.session_state:
-        st.info("👋 Complete a Diagnostic Check first.")
+        st.info("👋 Please complete a Diagnostic Check in 'Learning Modules' first.")
         return
 
-    st.header(f"🤖 Tutor: {st.session_state.current_topic}")
+    st.header(f"🤖 Socratic Tutor: {st.session_state.current_topic}")
 
-    # Initialize chat history
+    try:
+        api_key = st.secrets.get("GEMINI_API_KEY")
+        # Step 1: Standard Configuration
+        genai.configure(api_key=api_key)
+        
+        # Step 2: Use the Absolute Path to force the stable route
+        # This bypasses the 'v1beta' discovery that caused the 404
+        model = genai.GenerativeModel(model_name='models/gemini-1.5-flash')
+        
+    except Exception as e:
+        st.error(f"AI Setup Error: {e}")
+        return
+
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.markdown(m["content"])
 
-    if prompt := st.chat_input("Explain your reasoning..."):
+    if prompt := st.chat_input("Explain your chemistry reasoning..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
-        
         try:
-            api_key = st.secrets.get("GEMINI_API_KEY")
-            
-            # THE CRITICAL FIX FOR 404 v1beta:
-            # This forces the library to use the 'v1' stable endpoint 
-            # which matches your 'Free Tier' project status.
-            from google.api_core import client_options
-            opts = client_options.ClientOptions(api_version='v1')
-            
-            genai.configure(api_key=api_key, client_options=opts)
-            
-            # Using the stable model identifier
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            
             system_prompt = (
-                f"PhD Socratic Tutor. Topic: {st.session_state.current_topic}. "
+                f"PhD Chemistry Socratic Tutor. Topic: {st.session_state.current_topic}. "
                 f"Goal: Lead student to discover {st.session_state.logic_tree}. "
-                "Rule: Ask only one guiding question. Max 2 sentences."
+                f"Rule: Never give answers. Ask one guiding question. Max 3 sentences."
             )
-            
+            # The model call is now routed through the stable path defined above
             response = model.generate_content(f"{system_prompt}\nStudent: {prompt}")
             
             with st.chat_message("assistant"):
                 st.markdown(response.text)
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
             
+            # Use your database manager to log the turn
             log_temporal_trace(st.session_state.user['User_ID'], "AI_CHAT_TURN", st.session_state.current_topic)
             
         except Exception as e:
-            st.error(f"Technical Connection Error: {e}")
-
+            st.error(f"⚠️ Connection Error: {e}")
+            st.info("If the error persists, try clearing your Streamlit cache (Press 'C').")
 def render_progress(uid):
     st.header("📈 Progress Tracker")
     try:
