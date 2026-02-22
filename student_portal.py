@@ -96,20 +96,30 @@ def render_ai_chat(school):
 
     st.header(f"🤖 Socratic Tutor: {st.session_state.current_topic}")
     
-    # 1. API Configuration with Version Force
+    # 1. SETUP API & AUTO-DISCOVER MODEL
     try:
         api_key = st.secrets.get("GEMINI_API_KEY")
-        # Forcing the use of the stable v1 API to avoid v1beta 404s
-        genai.configure(api_key=api_key, transport='rest') 
+        genai.configure(api_key=api_key)
         
-        # We try the specific flash model identifier first
-        # If it fails, we fall back to the most universal one
-        model_name = 'gemini-1.5-flash' 
-        model = genai.GenerativeModel(model_name)
+        # This part solves the 404 once and for all:
+        # It looks through your account's available models and picks the best one.
+        if "active_model" not in st.session_state:
+            available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+            # Priority: 1.5-flash (Gemini 3) -> 1.5-pro -> gemini-pro (legacy)
+            if any("gemini-1.5-flash" in m for m in available_models):
+                st.session_state.active_model = "gemini-1.5-flash"
+            elif any("gemini-pro" in m for m in available_models):
+                st.session_state.active_model = "gemini-pro"
+            else:
+                st.session_state.active_model = available_models[0].replace("models/", "")
+        
+        model = genai.GenerativeModel(st.session_state.active_model)
+        
     except Exception as e:
         st.error(f"Setup Error: {e}")
         return
 
+    # 2. CHAT INTERFACE
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
@@ -121,19 +131,15 @@ def render_ai_chat(school):
         with st.chat_message("user"): st.markdown(prompt)
         
         try:
-            # Socratic Prompt Engineering for Science Education Journal
             system_prompt = f"""
-            ACT AS: A PhD Chemistry Socratic Tutor.
+            ROLE: PhD Chemistry Socratic Tutor.
             CHAPTER: Classification of Elements.
             TOPIC: {st.session_state.current_topic}.
             PEDAGOGICAL GOAL: lead student to discover {st.session_state.logic_tree}.
-            RULES: 
-            1. NO answers. 
-            2. Ask about 'Electronic Configuration' or 'Atomic Number'.
-            3. Max 3 sentences. 
+            RULES: No answers. Ask about 'Electronic Configuration' or 'Atomic Number'.
+            MAX 3 SENTENCES.
             """
             
-            # Requesting content using the stable method
             response = model.generate_content(f"{system_prompt}\nStudent: {prompt}")
             
             with st.chat_message("assistant"):
@@ -143,8 +149,7 @@ def render_ai_chat(school):
             log_temporal_trace(st.session_state.user['User_ID'], "AI_CHAT_TURN", st.session_state.current_topic)
             
         except Exception as e:
-            st.error(f"⚠️ Connection Error: {e}")
-            st.info("If you see 'Model not found', check the diagnostic tool above for the correct name.")
+            st.error(f"⚠️ Technical Connection Error: {e}")
 
 def render_progress(uid):
     st.header("📈 My Progress")
