@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import google.generativeai as genai
-# Importing the client library to force the version
-from google.generativeai.types import RequestOptions
 from database_manager import get_gspread_client, log_assessment, log_temporal_trace
 
 def show():
@@ -85,17 +83,14 @@ def render_ai_chat(school):
         return
 
     st.header(f"🤖 Socratic Tutor: {st.session_state.current_topic}")
-    
 
     try:
         api_key = st.secrets.get("GEMINI_API_KEY")
-        # MANUAL SETUP: Forcing v1 version and REST transport
-        genai.configure(api_key=api_key, transport='rest')
+        # Back to basics: The simplest configuration possible
+        genai.configure(api_key=api_key)
         
-        # Creating the model with explicit RequestOptions to avoid v1beta
-        model = genai.GenerativeModel(
-            model_name='gemini-1.5-flash'
-        )
+        # We use the 'models/' prefix which helps some library versions find the stable path
+        model = genai.GenerativeModel('models/gemini-1.5-flash')
     except Exception as e:
         st.error(f"AI Setup Error: {e}")
         return
@@ -114,22 +109,18 @@ def render_ai_chat(school):
             ROLE: PhD Chemistry Socratic Tutor.
             TOPIC: {st.session_state.current_topic}.
             RESEARCH GOAL: {st.session_state.logic_tree}.
-            RULES: Never give answers. Ask guiding questions about shells or atomic numbers. Max 3 sentences.
+            RULES: Never give answers. Ask guiding questions. Max 3 sentences.
             """
             
-            # Use request_options here to manually force the stable version
-            response = model.generate_content(
-                f"{system_prompt}\nStudent: {prompt}",
-                request_options=RequestOptions(api_version='v1')
-            )
+            # Simple call without complex arguments
+            response = model.generate_content(f"{system_prompt}\nStudent: {prompt}")
             
             with st.chat_message("assistant"):
                 st.markdown(response.text)
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
             log_temporal_trace(st.session_state.user['User_ID'], "AI_CHAT", st.session_state.current_topic)
         except Exception as e:
-            st.error(f"⚠️ Manual Connection Error: {e}")
-            st.info("If this fails, your API key may need 5-10 minutes to propagate across Google's v1 servers.")
+            st.error(f"⚠️ Connection Error: {e}")
 
 def render_progress(uid):
     st.header("📈 My Progress Tracker")
