@@ -7,26 +7,26 @@ from database_manager import get_gspread_client, log_assessment, log_temporal_tr
 def show():
     if 'user' not in st.session_state: return
     user = st.session_state.user
-    # Clean the student's group name
-    student_group = str(user.get('Group', '')).strip().upper()
+    # Standardize student group info
+    student_group = str(user.get('Group', '')).strip()
     
     st.markdown("""
         <style>
-        .metric-card { background: white; padding: 15px; border-radius: 10px; border: 1px solid #eee; text-align: center; }
         .instruction-container { background: #f0f7ff; padding: 20px; border-radius: 12px; border-left: 6px solid #007bff; margin-bottom: 20px; }
-        .sub-title-text { color: #007bff; font-weight: bold; font-size: 1.3rem; margin-bottom: 5px;}
-        .question-box { background: #fffdf0; padding: 15px; border-radius: 8px; border: 1px solid #ffeeba; margin-top: 10px; color: #333; }
+        .sub-title-text { color: #007bff; font-weight: bold; font-size: 1.3rem; }
+        .question-box { background: #fffdf0; padding: 15px; border-radius: 8px; border: 1px solid #ffeeba; color: #333; }
         </style>
     """, unsafe_allow_html=True)
 
     st.sidebar.title(f"🎓 {user.get('Name')}")
-    st.sidebar.info(f"Logged in as: {student_group}")
+    st.sidebar.write(f"**Current Group:** `{student_group}`")
     
     menu = ["🏠 Dashboard", "📚 Learning Modules", "🤖 Socratic Tutor", "📈 My Progress"]
     choice = st.sidebar.radio("Navigation", menu)
 
     if choice == "🏠 Dashboard":
-        render_dashboard(user, student_group)
+        st.title("🚀 Student Dashboard")
+        st.info(f"Checking for modules assigned to: **{student_group}**")
     elif choice == "📚 Learning Modules":
         render_modules(student_group)
     elif choice == "🤖 Socratic Tutor":
@@ -34,102 +34,89 @@ def show():
     elif choice == "📈 My Progress":
         render_progress(user.get('User_ID'))
 
-def render_dashboard(user, group):
-    st.title(f"🚀 Student Command Center")
-    m1, m2, m3, m4 = st.columns(4)
-    with m1: st.markdown(f'<div class="metric-card"><h3>Group</h3><p>{group}</p></div>', unsafe_allow_html=True)
-    with m2: st.markdown('<div class="metric-card"><h3>Status</h3><p>Active</p></div>', unsafe_allow_html=True)
-    with m3: st.markdown('<div class="metric-card"><h3>Chapter</h3><p>Chemistry 10</p></div>', unsafe_allow_html=True)
-    with m4: st.markdown('<div class="metric-card"><h3>Year</h3><p>2026</p></div>', unsafe_allow_html=True)
-    st.info("💡 **Instructions:** Go to 'Learning Modules' to find your assignments.")
-
 def render_modules(student_group):
     st.header("📚 Your Learning Path")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        raw_data = sh.worksheet("Instructional_Materials").get_all_values()
+        ws = sh.worksheet("Instructional_Materials")
+        data = ws.get_all_records()
         
-        if len(raw_data) < 2:
-            st.warning("The teacher's database is currently empty.")
+        if not data:
+            st.warning("The database worksheet is empty. Ask the teacher to deploy a module.")
             return
 
-        # --- DATA NORMALIZATION ---
-        df = pd.DataFrame(raw_data[1:], columns=raw_data[0])
-        # Force all column keys to lowercase/underscore
+        df = pd.DataFrame(data)
+        # 1. Clean column names (Teacher uses 'sub_title', student portal needs to match)
         df.columns = [c.strip().lower().replace(" ", "_").replace("(", "").replace(")", "") for c in df.columns]
-        
-        # Clean the Group column in the dataframe
-        df['group_clean'] = df['group'].str.strip().str.upper()
-        
-        # FILTER: Match student group to the sheet's group
-        my_lessons = df[df['group_clean'] == student_group]
 
-        # DEBUG MODE: If it's empty, show why
+        # --- DEBUG SECTION (ONLY VISIBLE TO HELP US FIND THE DATA) ---
+        with st.expander("🔍 VPS Debug: View Raw Sheet Data"):
+            st.write("Student Group in App:", f"`{student_group}`")
+            st.write("All Groups found in Sheet:", df['group'].unique().tolist())
+            st.dataframe(df[['main_title', 'sub_title', 'group']])
+
+        # 2. Case-Insensitive Filtering
+        my_lessons = df[df['group'].str.strip().str.upper() == student_group.strip().upper()]
+
         if my_lessons.empty:
-            st.error(f"No modules matched for group: '{student_group}'")
-            st.write("Available groups in the sheet:", df['group_clean'].unique())
+            st.error(f"⚠️ No matches found for '{student_group}'.")
+            st.info("Look at the Debug table above. Does the group name in the sheet match exactly?")
             return
 
         for idx, row in my_lessons.iterrows():
             with st.container():
                 st.markdown(f"## {row.get('main_title', 'Chapter')}")
-                st.markdown(f"<div class='sub-title-text'>Topic: {row.get('sub_title', 'Concept')}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='sub-title-text'>{row.get('sub_title', 'Topic')}</div>", unsafe_allow_html=True)
                 
-                # --- RESOURCES SECTION ---
+                # Resources
                 st.markdown('<div class="instruction-container">', unsafe_allow_html=True)
                 st.write("#### 📖 Instructional Materials")
-                c_pdf, c_vid = st.columns(2)
+                col1, col2 = st.columns(2)
                 
-                f_url = str(row.get('file_link', '')).strip()
-                if f_url and f_url.startswith("http"):
-                    c_pdf.link_button("📥 View Study Materials", f_url, use_container_width=True)
-                else:
-                    c_pdf.caption("No PDFs provided.")
-                    
-                v_url = str(row.get('video_link', '')).strip()
-                if v_url and v_url.startswith("http"):
-                    c_vid.video(v_url)
-                else:
-                    c_vid.info("No video lecture.")
+                f_link = str(row.get('file_link', '')).strip()
+                if f_link.startswith("http"):
+                    col1.link_button("📥 Download PDF/Materials", f_link, use_container_width=True)
+                
+                v_link = str(row.get('video_link', '')).strip()
+                if v_link.startswith("http"):
+                    col2.video(v_link)
                 st.markdown('</div>', unsafe_allow_html=True)
 
-                # --- 4-TIER QUESTION ---
+                # 4-Tier Question
                 st.markdown("---")
-                st.subheader("🧪 4-Tier Concept Check")
+                st.subheader("🧪 4-Tier Diagnostic Check")
                 
+                st.markdown(f"<div class='question-box'>{row.get('q_text', 'Question missing')}</div>", unsafe_allow_html=True)
                 
-                q_txt = row.get('q_text', 'Question body missing.')
-                st.markdown(f"<div class='question-box'>{q_txt}</div>", unsafe_allow_html=True)
-                
-                with st.form(key=f"eval_{idx}"):
-                    c1, c2 = st.columns(2)
+                with st.form(key=f"q_{idx}"):
+                    # Dynamic options mapping
                     opts = [row.get('oa'), row.get('ob'), row.get('oc'), row.get('od')]
-                    opts = [o for o in opts if o and str(o).strip()]
+                    opts = [o for o in opts if o]
                     
-                    t1 = c1.radio("Tier 1: Answer", opts if opts else ["Options error"])
-                    t2 = c2.select_slider("Tier 2: Confidence", ["Unsure", "Sure", "Very Sure"])
+                    c1, c2 = st.columns(2)
+                    t1 = c1.radio("Tier 1: Select Answer", opts if opts else ["Options missing"])
+                    t2 = c2.select_slider("Tier 2: Answer Confidence", ["Low", "Medium", "High"])
                     
                     r2c1, r2c2 = st.columns([2, 1])
                     t3 = r2c1.text_area("Tier 3: Reasoning")
-                    t4 = r2c2.select_slider("Tier 4: Reasoning Confidence", ["Unsure", "Sure", "Very Sure"])
+                    t4 = r2c2.select_slider("Tier 4: Reasoning Confidence", ["Low", "Medium", "High"])
                     
                     if st.form_submit_button("Submit"):
-                        t_id = row.get('sub_title', 'Unknown')
-                        log_assessment(st.session_state.user['User_ID'], student_group, t_id, t1, t2, t3, t4, "Complete", "")
-                        st.session_state.current_topic = t_id
-                        st.session_state.logic_tree = row.get('socratic_tree', '')
-                        st.success("✅ Assessment Saved! AI Tutor is now unlocked.")
+                        log_assessment(st.session_state.user['User_ID'], student_group, row.get('sub_title'), t1, t2, t3, t4, "Complete", "")
+                        st.session_state.current_topic = row.get('sub_title')
+                        st.session_state.logic_tree = row.get('socratic_tree')
+                        st.success("✅ Assessment Saved!")
 
     except Exception as e:
-        st.error(f"System Error: {e}")
+        st.error(f"Loading Error: {e}")
 
 def render_ai_chat(school):
-    if school != "School A":
-        st.warning("The AI Tutor is currently enabled for Group A only.")
+    if "School A" not in school:
+        st.warning("AI Tutor is for Experimental Group only.")
         return
     if 'current_topic' not in st.session_state:
-        st.info("👋 Complete a module diagnostic first to unlock the AI.")
+        st.info("Complete a module quiz first.")
         return
 
     st.header(f"🤖 Socratic Tutor: {st.session_state.current_topic}")
