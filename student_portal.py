@@ -99,34 +99,60 @@ def render_modules(student_group):
     except Exception as e:
         st.error(f"Error reading Sheet: {e}")
 
-# ... (rest of functions remain unchanged)
-
 def render_ai_chat(school):
-    if "School A" not in school:
-        st.warning("AI Tutor is for Experimental Group only.")
+    if "School A" not in school and "Exp_A" not in school:
+        st.warning("The Socratic AI Tutor is currently enabled for Experimental Groups only.")
         return
+        
     if 'current_topic' not in st.session_state:
-        st.info("Complete a module quiz first.")
+        st.info("👋 **Hello Scientist!** Please complete a diagnostic question in 'Learning Modules' so I know which chemistry concept we are exploring today.")
         return
 
     st.header(f"🤖 Socratic Tutor: {st.session_state.current_topic}")
     
-    if "messages" not in st.session_state: st.session_state.messages = []
+    # Initialize Chat History
+    if "messages" not in st.session_state:
+        st.session_state.messages = [
+            {"role": "assistant", "content": f"I see we are discussing '{st.session_state.current_topic}'. Based on your diagnostic response, how would you explain the underlying chemical principle here?"}
+        ]
+
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.markdown(m["content"])
 
-    if prompt := st.chat_input("Explain your logic..."):
+    if prompt := st.chat_input("Discuss your reasoning..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
         
+        # --- SCIENTIFIC PEDAGOGY ENGINE ---
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
         model = genai.GenerativeModel('gemini-1.5-pro')
-        context = f"Topic: {st.session_state.current_topic}. Teacher Logic: {st.session_state.logic_tree}. Student input: {prompt}."
         
-        response = model.generate_content(context)
-        with st.chat_message("assistant"):
-            st.markdown(response.text)
-            st.session_state.messages.append({"role": "assistant", "content": response.text})
+        # This is the "Journal-Grade" Socratic System Prompt
+        system_instruction = f"""
+        YOU ARE: A world-class Socratic Chemistry Tutor specializing in the Grade 10 chapter 'Classification of Elements'.
+        CONTEXT: The student is working on {st.session_state.current_topic}.
+        TEACHER'S LOGIC TREE: {st.session_state.logic_tree}
+        
+        PEDAGOGICAL RULES (Strict):
+        1. NEVER give the answer. If the student asks "What is the answer?", respond with a question about the periodic trend or sub-shell energy.
+        2. If the student has a misconception (e.g., thinks atomic weight is the basis of modern law), ask them about isotopes.
+        3. Use textbook terminology: Aufbau principle, n+l rule, electronic configuration, periods, and groups.
+        4. When they get it right, don't just say "Correct." Ask "Why does that make sense based on the number of protons?"
+        5. Keep responses concise (under 3 sentences) to encourage more student input.
+        """
+
+        full_prompt = f"{system_instruction}\n\nStudent says: {prompt}"
+        
+        try:
+            response = model.generate_content(full_prompt)
+            with st.chat_message("assistant"):
+                st.markdown(response.text)
+                st.session_state.messages.append({"role": "assistant", "content": response.text})
+            
+            # Log this for your Research Data (Learning Analytics)
+            log_temporal_trace(st.session_state.user['User_ID'], "SOCRATIC_CHAT_INTERACTION", f"Topic: {st.session_state.current_topic}")
+        except Exception as e:
+            st.error("AI connection lost. Please check your API key.")
 
 def render_progress(uid):
     st.header("📈 Growth Timeline")
