@@ -10,23 +10,15 @@ def show():
     # Standardize student group info
     student_group = str(user.get('Group', '')).strip()
     
-    st.markdown("""
-        <style>
-        .instruction-container { background: #f0f7ff; padding: 20px; border-radius: 12px; border-left: 6px solid #007bff; margin-bottom: 20px; }
-        .sub-title-text { color: #007bff; font-weight: bold; font-size: 1.3rem; }
-        .question-box { background: #fffdf0; padding: 15px; border-radius: 8px; border: 1px solid #ffeeba; color: #333; }
-        </style>
-    """, unsafe_allow_html=True)
-
     st.sidebar.title(f"🎓 {user.get('Name')}")
-    st.sidebar.write(f"**Current Group:** `{student_group}`")
+    st.sidebar.info(f"Your Assigned Group: **{student_group}**")
     
     menu = ["🏠 Dashboard", "📚 Learning Modules", "🤖 Socratic Tutor", "📈 My Progress"]
     choice = st.sidebar.radio("Navigation", menu)
 
     if choice == "🏠 Dashboard":
         st.title("🚀 Student Dashboard")
-        st.info(f"Checking for modules assigned to: **{student_group}**")
+        st.write(f"Welcome back, {user.get('Name')}!")
     elif choice == "📚 Learning Modules":
         render_modules(student_group)
     elif choice == "🤖 Socratic Tutor":
@@ -35,81 +27,83 @@ def show():
         render_progress(user.get('User_ID'))
 
 def render_modules(student_group):
-    st.header("📚 Your Learning Path")
+    st.title("📚 Learning Path")
+    
+    # --- VPS EMERGENCY DEBUG CONSOLE (STAYS AT TOP) ---
+    st.warning("🔬 VPS System Diagnostic Console")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         ws = sh.worksheet("Instructional_Materials")
-        data = ws.get_all_records()
+        raw_rows = ws.get_all_values()
         
-        if not data:
-            st.warning("The database worksheet is empty. Ask the teacher to deploy a module.")
+        if len(raw_rows) < 2:
+            st.error("The Google Sheet is empty! Please deploy a module from the Teacher Portal.")
             return
 
-        df = pd.DataFrame(data)
-        # 1. Clean column names (Teacher uses 'sub_title', student portal needs to match)
+        # Create the DataFrame
+        df = pd.DataFrame(raw_rows[1:], columns=raw_rows[0])
+        
+        # Show exactly what is in the sheet right now
+        with st.expander("🛠️ STEP 1: CLICK HERE TO SEE ALL DATA IN SHEET", expanded=True):
+            st.write("Below is every row the app sees in your Google Sheet:")
+            st.dataframe(df) 
+            st.write("End of data check.")
+
+        # --- NORMALIZATION & FILTERING ---
         df.columns = [c.strip().lower().replace(" ", "_").replace("(", "").replace(")", "") for c in df.columns]
+        
+        # We search for the group. We use .upper() to avoid "School A" vs "school a" errors.
+        df['group_match'] = df['group'].str.strip().str.upper()
+        target_group = student_group.strip().upper()
+        
+        my_lessons = df[df['group_match'] == target_group]
 
-        # --- DEBUG SECTION (ONLY VISIBLE TO HELP US FIND THE DATA) ---
-        with st.expander("🔍 VPS Debug: View Raw Sheet Data"):
-            st.write("Student Group in App:", f"`{student_group}`")
-            st.write("All Groups found in Sheet:", df['group'].unique().tolist())
-            st.dataframe(df[['main_title', 'sub_title', 'group']])
-
-        # 2. Case-Insensitive Filtering
-        my_lessons = df[df['group'].str.strip().str.upper() == student_group.strip().upper()]
+        st.info(f"Filtering for Group: `{target_group}`")
 
         if my_lessons.empty:
-            st.error(f"⚠️ No matches found for '{student_group}'.")
-            st.info("Look at the Debug table above. Does the group name in the sheet match exactly?")
-            return
-
-        for idx, row in my_lessons.iterrows():
-            with st.container():
-                st.markdown(f"## {row.get('main_title', 'Chapter')}")
-                st.markdown(f"<div class='sub-title-text'>{row.get('sub_title', 'Topic')}</div>", unsafe_allow_html=True)
-                
-                # Resources
-                st.markdown('<div class="instruction-container">', unsafe_allow_html=True)
-                st.write("#### 📖 Instructional Materials")
-                col1, col2 = st.columns(2)
-                
-                f_link = str(row.get('file_link', '')).strip()
-                if f_link.startswith("http"):
-                    col1.link_button("📥 Download PDF/Materials", f_link, use_container_width=True)
-                
-                v_link = str(row.get('video_link', '')).strip()
-                if v_link.startswith("http"):
-                    col2.video(v_link)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-                # 4-Tier Question
-                st.markdown("---")
-                st.subheader("🧪 4-Tier Diagnostic Check")
-                
-                st.markdown(f"<div class='question-box'>{row.get('q_text', 'Question missing')}</div>", unsafe_allow_html=True)
-                
-                with st.form(key=f"q_{idx}"):
-                    # Dynamic options mapping
-                    opts = [row.get('oa'), row.get('ob'), row.get('oc'), row.get('od')]
-                    opts = [o for o in opts if o]
+            st.error(f"❌ No lessons matched for `{target_group}`.")
+            st.write("Groups available in your sheet are:", df['group_match'].unique().tolist())
+        else:
+            st.success(f"✅ Found {len(my_lessons)} lesson(s) for you!")
+            
+            for idx, row in my_lessons.iterrows():
+                with st.container():
+                    st.divider()
+                    st.header(f"📖 {row.get('main_title')}")
+                    st.subheader(row.get('sub_title'))
                     
+                    # Materials
                     c1, c2 = st.columns(2)
-                    t1 = c1.radio("Tier 1: Select Answer", opts if opts else ["Options missing"])
-                    t2 = c2.select_slider("Tier 2: Answer Confidence", ["Low", "Medium", "High"])
+                    f_url = str(row.get('file_link', '')).strip()
+                    if f_url.startswith("http"):
+                        c1.link_button("📂 View Lesson PDF/Notes", f_url)
                     
-                    r2c1, r2c2 = st.columns([2, 1])
-                    t3 = r2c1.text_area("Tier 3: Reasoning")
-                    t4 = r2c2.select_slider("Tier 4: Reasoning Confidence", ["Low", "Medium", "High"])
-                    
-                    if st.form_submit_button("Submit"):
-                        log_assessment(st.session_state.user['User_ID'], student_group, row.get('sub_title'), t1, t2, t3, t4, "Complete", "")
-                        st.session_state.current_topic = row.get('sub_title')
-                        st.session_state.logic_tree = row.get('socratic_tree')
-                        st.success("✅ Assessment Saved!")
+                    v_url = str(row.get('video_link', '')).strip()
+                    if v_url.startswith("http"):
+                        c2.video(v_url)
+
+                    # 4-Tier Form
+                    st.write("---")
+                    st.markdown(f"**Question:** {row.get('q_text')}")
+                    with st.form(key=f"form_{idx}"):
+                        opts = [row.get('oa'), row.get('ob'), row.get('oc'), row.get('od')]
+                        opts = [o for o in opts if o]
+                        ans = st.radio("Tier 1: Answer", opts)
+                        conf = st.select_slider("Tier 2: Confidence", ["Unsure", "Sure", "Very Sure"])
+                        reason = st.text_area("Tier 3: Reasoning")
+                        r_conf = st.select_slider("Tier 4: Reasoning Confidence", ["Unsure", "Sure", "Very Sure"])
+                        
+                        if st.form_submit_button("Submit"):
+                            log_assessment(st.session_state.user['User_ID'], student_group, row.get('sub_title'), ans, conf, reason, r_conf, "Logged", "")
+                            st.session_state.current_topic = row.get('sub_title')
+                            st.session_state.logic_tree = row.get('socratic_tree')
+                            st.balloons()
 
     except Exception as e:
-        st.error(f"Loading Error: {e}")
+        st.error(f"Critical System Failure: {e}")
+
+# ... (render_ai_chat and render_progress functions remain identical)
 
 def render_ai_chat(school):
     if "School A" not in school:
