@@ -7,6 +7,7 @@ from googleapiclient.http import MediaIoBaseUpload
 import io
 from datetime import datetime
 
+# --- AUTHENTICATION ---
 def get_creds():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     try:
@@ -22,6 +23,18 @@ def get_gspread_client():
     creds = get_creds()
     return gspread.authorize(creds) if creds else None
 
+# --- LOGIN (The fix for your AttributeError) ---
+def check_login(user_id):
+    client = get_gspread_client()
+    try:
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        df = pd.DataFrame(sh.worksheet("Participants").get_all_records())
+        df['User_ID'] = df['User_ID'].astype(str).str.upper()
+        match = df[df['User_ID'] == user_id.upper()]
+        return match.iloc[0].to_dict() if not match.empty else None
+    except: return None
+
+# --- DRIVE UPLOADER (Updated for Shared Drives) ---
 def upload_to_drive(uploaded_file):
     FOLDER_ID = "0AJAe9AoSTt6-Uk9PVA" 
     try:
@@ -36,6 +49,7 @@ def upload_to_drive(uploaded_file):
         st.error(f"Drive Error: {e}")
         return ""
 
+# --- DATA SAVING ---
 def save_bulk_concepts(teacher_id, group, main_title, data):
     try:
         client = get_gspread_client()
@@ -54,6 +68,7 @@ def save_assignment(teacher_id, group, title, desc, file_url):
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        # Ensure you have a worksheet named 'Assignments' in your Google Sheet
         ws = sh.worksheet("Assignments")
         ws.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), teacher_id, group, title, desc, file_url])
         return True
