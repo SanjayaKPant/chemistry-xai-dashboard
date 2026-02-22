@@ -69,6 +69,7 @@ def render_ai_chat(school):
 
     st.header(f"🤖 Tutor: {st.session_state.current_topic}")
 
+    # Initialize chat history
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
@@ -82,18 +83,21 @@ def render_ai_chat(school):
         try:
             api_key = st.secrets.get("GEMINI_API_KEY")
             
-            # THE HARD RESET: 
-            # We use ClientOptions to force 'v1' and bypass 'v1beta' entirely.
+            # THE CRITICAL FIX FOR 404 v1beta:
+            # This forces the library to use the 'v1' stable endpoint 
+            # which matches your 'Free Tier' project status.
             from google.api_core import client_options
             opts = client_options.ClientOptions(api_version='v1')
+            
             genai.configure(api_key=api_key, client_options=opts)
             
+            # Using the stable model identifier
             model = genai.GenerativeModel('gemini-1.5-flash')
             
             system_prompt = (
                 f"PhD Socratic Tutor. Topic: {st.session_state.current_topic}. "
                 f"Goal: Lead student to discover {st.session_state.logic_tree}. "
-                "Never give answers. Ask one guiding question. Max 2 sentences."
+                "Rule: Ask only one guiding question. Max 2 sentences."
             )
             
             response = model.generate_content(f"{system_prompt}\nStudent: {prompt}")
@@ -101,10 +105,11 @@ def render_ai_chat(school):
             with st.chat_message("assistant"):
                 st.markdown(response.text)
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
-            log_temporal_trace(st.session_state.user['User_ID'], "AI_CHAT", st.session_state.current_topic)
+            
+            log_temporal_trace(st.session_state.user['User_ID'], "AI_CHAT_TURN", st.session_state.current_topic)
             
         except Exception as e:
-            st.error(f"Connection Error: {e}")
+            st.error(f"Technical Connection Error: {e}")
 
 def render_progress(uid):
     st.header("📈 Progress Tracker")
