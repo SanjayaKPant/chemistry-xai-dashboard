@@ -69,7 +69,7 @@ def render_modules(student_group):
                         log_assessment(st.session_state.user['User_ID'], student_group, row.get('Sub_Title'), t1, t2, t3, t4, "Complete", "")
                         st.session_state.current_topic = row.get('Sub_Title')
                         st.session_state.logic_tree = row.get('Socratic_Tree')
-                        st.success("✅ Logged!")
+                        st.success("✅ Diagnostic Logged! You can now use the AI Tutor.")
 
     except Exception as e:
         st.error(f"⚠️ System Error: {e}")
@@ -87,7 +87,8 @@ def render_ai_chat(school):
 
     try:
         api_key = st.secrets.get("GEMINI_API_KEY")
-        genai.configure(api_key=api_key)
+        # FORCE STABLE API VERSION (v1) to fix the 404 error
+        genai.configure(api_key=api_key, transport='rest') 
         model = genai.GenerativeModel('gemini-1.5-flash')
     except Exception as e:
         st.error(f"AI Setup Error: {e}")
@@ -99,12 +100,21 @@ def render_ai_chat(school):
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.markdown(m["content"])
 
-    if prompt := st.chat_input("Ask a follow-up..."):
+    if prompt := st.chat_input("Ask your chemistry tutor..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
         try:
-            system_prompt = f"PhD Chemistry Socratic Tutor. Topic: {st.session_state.current_topic}. Goal: {st.session_state.logic_tree}. No answers. Max 3 sentences."
+            # Socratic Prompting for Grade 10 Chemistry
+            system_prompt = f"""
+            ROLE: Grade 10 Chemistry Socratic Tutor.
+            TOPIC: {st.session_state.current_topic}.
+            RESEARCH LOGIC: {st.session_state.logic_tree}.
+            RULE 1: Never give direct answers.
+            RULE 2: If the student is wrong, ask about periodic trends or electronic configuration.
+            RULE 3: Max 3 sentences.
+            """
             response = model.generate_content(f"{system_prompt}\nStudent: {prompt}")
+            
             with st.chat_message("assistant"):
                 st.markdown(response.text)
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
@@ -113,14 +123,14 @@ def render_ai_chat(school):
             st.error(f"⚠️ Connection Error: {e}")
 
 def render_progress(uid):
-    st.header("📈 My Progress")
+    st.header("📈 My Progress Tracker")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
         user_df = df[df['User_ID'].astype(str) == str(uid)]
         if not user_df.empty:
-            fig = px.line(user_df, x="Timestamps", y="Tier_2 (Confidence_Ans)", title="Confidence Growth", markers=True)
+            fig = px.line(user_df, x="Timestamps", y="Tier_2 (Confidence_Ans)", title="Your Learning Confidence", markers=True)
             st.plotly_chart(fig, use_container_width=True)
     except Exception as e:
         st.error(f"Analytics updating... {e}")
