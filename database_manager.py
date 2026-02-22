@@ -7,7 +7,6 @@ from googleapiclient.http import MediaIoBaseUpload
 import io
 from datetime import datetime
 
-# --- AUTHENTICATION ---
 def get_creds():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     try:
@@ -23,7 +22,6 @@ def get_gspread_client():
     creds = get_creds()
     return gspread.authorize(creds) if creds else None
 
-# --- DRIVE: UPLOAD (Multiple Files & Shared Drive Support) ---
 def upload_to_drive(uploaded_file):
     FOLDER_ID = "0AJAe9AoSTt6-Uk9PVA" 
     try:
@@ -31,26 +29,13 @@ def upload_to_drive(uploaded_file):
         service = build('drive', 'v3', credentials=creds)
         meta = {'name': uploaded_file.name, 'parents': [FOLDER_ID]}
         media = MediaIoBaseUpload(io.BytesIO(uploaded_file.getvalue()), mimetype=uploaded_file.type)
-        
-        f = service.files().create(
-            body=meta, 
-            media_body=media, 
-            fields='id, webViewLink',
-            supportsAllDrives=True # Fixed for Shared Drives
-        ).execute()
-        
-        service.permissions().create(
-            fileId=f.get('id'), 
-            body={'type': 'anyone', 'role': 'reader'},
-            supportsAllDrives=True
-        ).execute()
-        
+        f = service.files().create(body=meta, media_body=media, fields='id, webViewLink', supportsAllDrives=True).execute()
+        service.permissions().create(fileId=f.get('id'), body={'type': 'anyone', 'role': 'reader'}, supportsAllDrives=True).execute()
         return f.get('webViewLink')
     except Exception as e:
         st.error(f"Drive Error: {e}")
         return ""
 
-# --- DATA SAVING ---
 def save_bulk_concepts(teacher_id, group, main_title, data):
     try:
         client = get_gspread_client()
@@ -71,6 +56,15 @@ def save_assignment(teacher_id, group, title, desc, file_url):
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         ws = sh.worksheet("Assignments")
         ws.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), teacher_id, group, title, desc, file_url])
+        return True
+    except: return False
+
+def log_assessment(user_id, group, module_id, t1, t2, t3, t4, diag, misc):
+    try:
+        client = get_gspread_client()
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        ws = sh.worksheet("Assessment_Logs")
+        ws.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user_id, module_id, t1, t2, t3, t4, diag, misc, group])
         return True
     except: return False
 
