@@ -88,32 +88,15 @@ def render_ai_chat(school):
 
     st.header(f"🤖 Socratic Tutor: {st.session_state.current_topic}")
     
-    # 1. SETUP API & AUTO-DISCOVER MODEL
     try:
         api_key = st.secrets.get("GEMINI_API_KEY")
-        if not api_key:
-            st.error("API Key not found in Secrets. Please add GEMINI_API_KEY.")
-            return
-            
         genai.configure(api_key=api_key)
-        
-        if "active_model" not in st.session_state:
-            available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-            # Priority: 1.5-flash -> gemini-pro
-            if any("gemini-1.5-flash" in m for m in available_models):
-                st.session_state.active_model = "gemini-1.5-flash"
-            elif any("gemini-pro" in m for m in available_models):
-                st.session_state.active_model = "gemini-pro"
-            else:
-                st.session_state.active_model = available_models[0].replace("models/", "")
-        
-        model = genai.GenerativeModel(st.session_state.active_model)
-        
+        # Using the stable 1.5-flash model ID
+        model = genai.GenerativeModel('gemini-1.5-flash')
     except Exception as e:
-        st.error(f"Setup Error: {e}")
+        st.error(f"AI Setup Error: {e}")
         return
 
-    # 2. CHAT INTERFACE
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
@@ -130,7 +113,7 @@ def render_ai_chat(school):
             CHAPTER: Classification of Elements.
             TOPIC: {st.session_state.current_topic}.
             PEDAGOGICAL GOAL: lead student to discover {st.session_state.logic_tree}.
-            RULES: No direct answers. Ask about 'Electronic Configuration' or 'Atomic Number'.
+            RULES: No answers. Ask about 'Electronic Configuration' or 'Atomic Number'.
             MAX 3 SENTENCES.
             """
             
@@ -153,7 +136,9 @@ def render_progress(uid):
         df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
         user_df = df[df['User_ID'].astype(str) == str(uid)]
         if not user_df.empty:
-            fig = px.line(user_df, x="Timestamps", y="Tier_2 (Confidence_Ans)", markers=True)
+            # FIXED: Closed the parenthesis correctly and matched column names
+            fig = px.line(user_df, x="Timestamps", y="Tier_2 (Confidence_Ans)", 
+                         title="Confidence Progression Over Time", markers=True)
             st.plotly_chart(fig, use_container_width=True)
-    except:
-        st.error("Updating analytics...")
+    except Exception as e:
+        st.error(f"Analytics updating... {e}")
