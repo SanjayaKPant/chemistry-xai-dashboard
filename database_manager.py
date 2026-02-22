@@ -58,6 +58,15 @@ def save_bulk_concepts(teacher_id, group, main_title, data):
         return True
     except: return False
 
+def save_assignment(teacher_id, group, title, desc, file_url):
+    try:
+        client = get_gspread_client()
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        ws = sh.worksheet("Assignments")
+        ws.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), teacher_id, group, title, desc, file_url])
+        return True
+    except: return False
+
 def log_assessment(user_id, group, module_id, t1, t2, t3, t4, diag, misc):
     try:
         client = get_gspread_client()
