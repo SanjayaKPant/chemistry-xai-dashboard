@@ -1,158 +1,87 @@
 import streamlit as st
+import gspread
 import pandas as pd
-import plotly.express as px
-import google.generativeai as genai
-from database_manager import get_gspread_client, log_assessment, log_temporal_trace
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+import io
+from datetime import datetime
 
-def show():
-    if 'user' not in st.session_state: return
-    user = st.session_state.user
-    school = str(user.get('Group', 'School B')).strip()
-    
-    st.markdown("""
-        <style>
-        .metric-card { background: white; padding: 15px; border-radius: 10px; border: 1px solid #eee; text-align: center; }
-        .instruction-container { background: #f0f7ff; padding: 20px; border-radius: 12px; border-left: 6px solid #007bff; margin-bottom: 20px; }
-        .sub-title-text { color: #555; font-size: 1.2rem; font-style: italic; }
-        </style>
-    """, unsafe_allow_html=True)
+# --- AUTHENTICATION & CLIENT ---
+def get_creds():
+    scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    try:
+        creds_info = dict(st.secrets["gcp_service_account"])
+        if "private_key" in creds_info:
+            creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
+        return Credentials.from_service_account_info(creds_info, scopes=scope)
+    except Exception as e:
+        st.error(f"Auth Error: {e}")
+        return None
 
-    st.sidebar.title(f"🎓 {user.get('Name')}")
-    menu = ["🏠 Dashboard", "📚 Learning Modules", "📝 Assignments", "🤖 Socratic Tutor", "📈 My Progress"]
-    choice = st.sidebar.radio("Navigation", menu)
+def get_gspread_client():
+    creds = get_creds()
+    return gspread.authorize(creds) if creds else None
 
-    if choice == "🏠 Dashboard":
-        render_dashboard(user, school)
-    elif choice == "📚 Learning Modules":
-        render_modules(school)
-    elif choice == "📝 Assignments":
-        render_assignments(school)
-    elif choice == "🤖 Socratic Tutor":
-        render_ai_chat(school)
-    elif choice == "📈 My Progress":
-        render_progress(user.get('User_ID'))
+# --- CORE FUNCTIONS ---
+def check_login(user_id):
+    client = get_gspread_client()
+    try:
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        df = pd.DataFrame(sh.worksheet("Participants").get_all_records())
+        df['User_ID'] = df['User_ID'].astype(str).str.upper()
+        match = df[df['User_ID'] == user_id.upper()]
+        return match.iloc[0].to_dict() if not match.empty else None
+    except: return None
 
-def render_dashboard(user, school):
-    st.title(f"🚀 Student Command Center")
-    
-    m1, m2, m3, m4 = st.columns(4)
-    with m1: st.markdown(f'<div class="metric-card"><h3>Group</h3><p>{school}</p></div>', unsafe_allow_html=True)
-    with m2: st.markdown('<div class="metric-card"><h3>Status</h3><p>Active</p></div>', unsafe_allow_html=True)
-    with m3: st.markdown('<div class="metric-card"><h3>Goal</h3><p>Mastery</p></div>', unsafe_allow_html=True)
-    with m4: st.markdown('<div class="metric-card"><h3>Level</h3><p>Grade 10</p></div>', unsafe_allow_html=True)
+def upload_to_drive(uploaded_file):
+    FOLDER_ID = "0AJAe9AoSTt6-Uk9PVA" 
+    try:
+        creds = get_creds()
+        service = build('drive', 'v3', credentials=creds)
+        meta = {'name': uploaded_file.name, 'parents': [FOLDER_ID]}
+        media = MediaIoBaseUpload(io.BytesIO(uploaded_file.getvalue()), mimetype=uploaded_file.type)
+        f = service.files().create(body=meta, media_body=media, fields='id, webViewLink', supportsAllDrives=True).execute()
+        service.permissions().create(fileId=f.get('id'), body={'type': 'anyone', 'role': 'reader'}, supportsAllDrives=True).execute()
+        return f.get('webViewLink')
+    except: return ""
 
-    st.markdown("---")
-    c1, c2 = st.columns([2, 1])
-    with c1:
-        st.subheader("📢 Daily Announcements")
-        st.info("💡 **Pro-Tip:** Check the 'Video Lessons' in your modules before attempting the 4-Tier Diagnostic.")
-    with c2:
-        st.subheader("📊 Your Progress")
-        st.progress(0.4)
-        st.caption("Overall Course Completion: 40%")
-
-def render_modules(school):
-    st.header("📚 Learning Modules")
+def save_bulk_concepts(teacher_id, group, main_title, data):
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        data = sh.worksheet("Instructional_Materials").get_all_values()
-        df = pd.DataFrame(data[1:], columns=data[0])
-        df.columns = [c.strip().upper() for c in df.columns]
-        
-        my_lessons = df[df['GROUP'].str.upper() == school.upper()]
+        ws = sh.worksheet("Instructional_Materials")
+        row = [datetime.now().strftime("%Y-%m-%d %H:%M:%S"), teacher_id, group, main_title, 
+               data.get('sub_title',''), data.get('objectives',''), data.get('file_link',''), 
+               data.get('video_link',''), data.get('q_text',''), data.get('oa',''), 
+               data.get('ob',''), data.get('oc',''), data.get('od',''), 
+               data.get('correct',''), data.get('socratic_tree','')]
+        ws.append_row(row)
+        return True
+    except: return False
 
-        for idx, row in my_lessons.iterrows():
-            with st.container():
-                st.write(f"### {row.get('MAIN_TITLE')}")
-                st.markdown(f"<div class='sub-title-text'>Topic: {row.get('SUB_TITLE')}</div>", unsafe_allow_html=True)
-                st.write(f"**Objectives:** {row.get('LEARNING_OBJECTIVES')}")
-
-                # SECTION 1: INSTRUCTIONAL MATERIALS (Above the Diagnostic)
-                st.markdown('<div class="instruction-container">', unsafe_allow_html=True)
-                st.write("#### 📦 Instructional Resources")
-                col_file, col_vid = st.columns([1, 1])
-                with col_file:
-                    st.write("**📄 Lecture Notes & PPTs**")
-                    links = str(row.get('FILE_LINK', '')).split(", ")
-                    for i, link in enumerate(links):
-                        if link.strip(): st.link_button(f"Open Resource {i+1}", link.strip(), use_container_width=True)
-                with col_vid:
-                    st.write("**🎥 Video Lessons**")
-                    if row.get('VIDEO_LINK'): st.video(row.get('VIDEO_LINK'))
-                    else: st.caption("No video resource provided.")
-                st.markdown('</div>', unsafe_allow_html=True)
-
-                # SECTION 2: COMPACT 4-TIER DIAGNOSTIC
-                st.markdown("---")
-                st.subheader("🧪 4-Tier Concept Check")
-                
-                st.write(f"**Diagnostic Question:** {row.get('Q_TEXT')}")
-                
-                with st.form(key=f"form_{idx}"):
-                    r1_c1, r1_c2 = st.columns(2)
-                    t1 = r1_c1.radio("Tier 1: Answer", [row.get('OA'), row.get('OB'), row.get('OC'), row.get('OD')])
-                    t2 = r1_c2.select_slider("Tier 2: Confidence", ["Low", "Medium", "High"])
-                    
-                    r2_c1, r2_c2 = st.columns([2, 1])
-                    t3 = r2_c1.text_area("Tier 3: Scientific Reasoning (Explain)")
-                    t4 = r2_c2.select_slider("Tier 4: Reason Confidence", ["Low", "Medium", "High"])
-                    
-                    if st.form_submit_button("Submit & Unlock AI Tutor"):
-                        log_assessment(st.session_state.user['User_ID'], school, row['SUB_TITLE'], t1, t2, t3, t4, "Complete", "")
-                        st.session_state.current_topic = row['SUB_TITLE']
-                        st.session_state.logic_tree = row['SOCRATIC_TREE']
-                        st.success("✅ Assessment Recorded! Open the 'Socratic Tutor' tab to discuss.")
-                        log_temporal_trace(st.session_state.user['User_ID'], "MODULE_SUBMIT", row['SUB_TITLE'])
-    except Exception as e: st.error(f"Module Error: {e}")
-
-def render_ai_chat(school):
-    if school != "School A":
-        st.warning("AI features are currently available for Experimental Group A.")
-        return
-    if 'current_topic' not in st.session_state:
-        st.info("👋 Please finish a diagnostic question in 'Learning Modules' first.")
-        return
-
-    st.header(f"🤖 Socratic Tutor: {st.session_state.current_topic}")
-    if "messages" not in st.session_state: st.session_state.messages = []
-    for m in st.session_state.messages:
-        with st.chat_message(m["role"]): st.markdown(m["content"])
-
-    if prompt := st.chat_input("Explain your logic..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"): st.markdown(prompt)
-        
-        genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-        model = genai.GenerativeModel('gemini-1.5-pro')
-        context = f"Topic: {st.session_state.current_topic}. Teacher's Logic: {st.session_state.logic_tree}. Student input: {prompt}."
-        
-        response = model.generate_content(context)
-        with st.chat_message("assistant"):
-            st.markdown(response.text)
-            st.session_state.messages.append({"role": "assistant", "content": response.text})
-
-def render_progress(uid):
-    st.header("📈 Growth Timeline")
+def save_assignment(teacher_id, group, title, desc, file_url):
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
-        user_df = df[df['User_ID'].astype(str) == str(uid)]
-        if not user_df.empty:
-            st.plotly_chart(px.line(user_df, x="Timestamp", y="Tier_2", title="Confidence Tracker", markers=True))
-        else: st.info("No data yet.")
-    except: st.error("Progress engine offline.")
+        ws = sh.worksheet("Assignments")
+        ws.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), teacher_id, group, title, desc, file_url])
+        return True
+    except: return False
 
-def render_assignments(school):
-    st.header("📝 Assignments")
+def log_assessment(user_id, group, module_id, t1, t2, t3, t4, diag, misc):
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        df = pd.DataFrame(sh.worksheet("Assignments").get_all_records())
-        tasks = df[df['Group'].str.upper() == school.upper()]
-        for _, t in tasks.iterrows():
-            with st.expander(f"📋 {t['Title']}"):
-                st.write(t['Instructions'])
-                if t['File_Link']: st.link_button("📥 Download Resource", t['File_Link'])
-    except: st.info("No assignments yet.")
+        ws = sh.worksheet("Assessment_Logs")
+        ws.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user_id, module_id, t1, t2, t3, t4, diag, misc, group])
+        return True
+    except: return False
+
+def log_temporal_trace(user_id, event, details=""):
+    try:
+        client = get_gspread_client()
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        ws = sh.worksheet("Temporal_Traces")
+        ws.append_row([user_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), event, details])
+    except: pass
