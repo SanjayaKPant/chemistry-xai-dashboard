@@ -134,51 +134,53 @@ def render_modules(student_group):
         st.error(f"⚠️ Error loading modules: {e}")
 
 def render_ai_chat(school):
-    if "School A" not in school:
-        st.warning("The Socratic AI Tutor is currently enabled for Experimental Group A only.")
+    # Research constraint: Only Experimental Group gets the Socratic AI
+    if school not in ["School A", "Exp_A"]:
+        st.warning("The Socratic AI Tutor is currently active for the Experimental Group only.")
         return
         
     if 'current_topic' not in st.session_state:
-        st.info("👋 **Welcome Scientist!** Complete a diagnostic question first to start the Socratic session.")
+        st.info("👋 **Welcome!** Please complete the diagnostic question in 'Learning Modules' to activate the Socratic Tutor.")
         return
 
     st.header(f"🤖 Socratic Tutor: {st.session_state.current_topic}")
     
     if "messages" not in st.session_state:
-        st.session_state.messages = [
-            {"role": "assistant", "content": f"I see we are discussing '{st.session_state.current_topic}'. Based on your reasoning, what do you think would happen if we changed the atomic number?"}
-        ]
+        st.session_state.messages = []
 
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.markdown(m["content"])
 
-    if prompt := st.chat_input("Discuss your reasoning..."):
+    if prompt := st.chat_input("Discuss your chemical reasoning..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
         
-        genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-        model = genai.GenerativeModel('gemini-1.5-pro')
-        
-        # High-rank journal pedagogical prompt
-        system_instruction = f"""
-        YOU ARE: A world-class Socratic Chemistry Tutor for Grade 10.
-        TOPIC: {st.session_state.current_topic}.
-        TEACHER'S LOGIC: {st.session_state.logic_tree}
-        
-        RULES:
-        1. NEVER give the answer directly.
-        2. Use the 'Classification of Elements' textbook terminology.
-        3. If the student has a misconception, ask a guiding question (Scaffolding).
-        4. Keep responses brief (under 3 sentences).
-        """
-        
-        response = model.generate_content(f"{system_instruction}\nStudent: {prompt}")
-        with st.chat_message("assistant"):
-            st.markdown(response.text)
-            st.session_state.messages.append({"role": "assistant", "content": response.text})
-        
-        log_temporal_trace(st.session_state.user['User_ID'], "SOCRATIC_CHAT", st.session_state.current_topic)
-
+        # --- SOCRATIC ENGINE CONFIGURATION ---
+        try:
+            # Note: Using GEMINI_API_KEY to match your specific secrets
+            genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+            model = genai.GenerativeModel('gemini-1.5-pro')
+            
+            system_instruction = f"""
+            ROLE: PhD Chemistry Socratic Educator.
+            CONTEXT: Grade 10 - Classification of Elements.
+            TOPIC: {st.session_state.current_topic}.
+            PEDAGOGY: Use Socratic Scaffolding. Never provide direct answers. 
+            If a student is confused about periodic trends, ask them about 'Effective Nuclear Charge' or 'Shell Number'.
+            Refer to the Teacher's Logic Tree: {st.session_state.logic_tree}
+            """
+            
+            response = model.generate_content(f"{system_instruction}\nStudent input: {prompt}")
+            
+            with st.chat_message("assistant"):
+                st.markdown(response.text)
+                st.session_state.messages.append({"role": "assistant", "content": response.text})
+            
+            # Log for research analytics
+            log_temporal_trace(st.session_state.user['User_ID'], "SOCRATIC_INTERACTION", st.session_state.current_topic)
+            
+        except KeyError:
+            st.error("Secret Key Mismatch: Ensure your secret is named 'GEMINI_API_KEY' in Streamlit settings.")
 def render_progress(uid):
     st.header("📈 My Progress Tracker")
     try:
