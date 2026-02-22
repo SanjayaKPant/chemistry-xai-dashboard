@@ -88,6 +88,32 @@ def render_ai_chat(school):
 
     st.header(f"🤖 Socratic Tutor: {st.session_state.current_topic}")
     
+    # 1. SETUP API & AUTO-DISCOVER MODEL
+    try:
+        api_key = st.secrets.get("GEMINI_API_KEY")
+        if not api_key:
+            st.error("API Key not found in Secrets. Please add GEMINI_API_KEY.")
+            return
+            
+        genai.configure(api_key=api_key)
+        
+        if "active_model" not in st.session_state:
+            available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+            # Priority: 1.5-flash -> gemini-pro
+            if any("gemini-1.5-flash" in m for m in available_models):
+                st.session_state.active_model = "gemini-1.5-flash"
+            elif any("gemini-pro" in m for m in available_models):
+                st.session_state.active_model = "gemini-pro"
+            else:
+                st.session_state.active_model = available_models[0].replace("models/", "")
+        
+        model = genai.GenerativeModel(st.session_state.active_model)
+        
+    except Exception as e:
+        st.error(f"Setup Error: {e}")
+        return
+
+    # 2. CHAT INTERFACE
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
@@ -99,19 +125,13 @@ def render_ai_chat(school):
         with st.chat_message("user"): st.markdown(prompt)
         
         try:
-            # Using your new personal API Key from secrets
-            api_key = st.secrets.get("GEMINI_API_KEY")
-            genai.configure(api_key=api_key)
-            
-            # STABLE IDENTIFIER: Using gemini-1.5-flash for personal keys
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            
             system_prompt = f"""
             ROLE: PhD Chemistry Socratic Tutor.
             CHAPTER: Classification of Elements.
             TOPIC: {st.session_state.current_topic}.
             PEDAGOGICAL GOAL: lead student to discover {st.session_state.logic_tree}.
-            RULES: No answers. Max 3 sentences. Use textbook terminology (valence, atomic number).
+            RULES: No direct answers. Ask about 'Electronic Configuration' or 'Atomic Number'.
+            MAX 3 SENTENCES.
             """
             
             response = model.generate_content(f"{system_prompt}\nStudent: {prompt}")
@@ -133,5 +153,7 @@ def render_progress(uid):
         df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
         user_df = df[df['User_ID'].astype(str) == str(uid)]
         if not user_df.empty:
-            # Ensuring column names match your sheet headers
-            fig = px.line(user_df,
+            fig = px.line(user_df, x="Timestamps", y="Tier_2 (Confidence_Ans)", markers=True)
+            st.plotly_chart(fig, use_container_width=True)
+    except:
+        st.error("Updating analytics...")
