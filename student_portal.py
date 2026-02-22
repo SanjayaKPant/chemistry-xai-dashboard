@@ -7,18 +7,16 @@ from database_manager import get_gspread_client, log_assessment, log_temporal_tr
 def show():
     if 'user' not in st.session_state: return
     user = st.session_state.user
-    # Standardize student group info
-    student_group = str(user.get('Group', '')).strip()
+    student_group = str(user.get('Group', 'School A')).strip()
     
     st.sidebar.title(f"🎓 {user.get('Name')}")
-    st.sidebar.info(f"Your Assigned Group: **{student_group}**")
+    st.sidebar.info(f"Group: {student_group}")
     
     menu = ["🏠 Dashboard", "📚 Learning Modules", "🤖 Socratic Tutor", "📈 My Progress"]
     choice = st.sidebar.radio("Navigation", menu)
 
     if choice == "🏠 Dashboard":
-        st.title("🚀 Student Dashboard")
-        st.write(f"Welcome back, {user.get('Name')}!")
+        render_dashboard(user, student_group)
     elif choice == "📚 Learning Modules":
         render_modules(student_group)
     elif choice == "🤖 Socratic Tutor":
@@ -26,84 +24,82 @@ def show():
     elif choice == "📈 My Progress":
         render_progress(user.get('User_ID'))
 
-def render_modules(student_group):
-    st.title("📚 Learning Path")
+def render_dashboard(user, group):
+    st.title(f"🚀 Student Command Center")
+    st.info(f"Welcome! You are currently viewing modules for **{group}**.")
+    # Add a visual reminder of the 4-tier process
     
-    # --- VPS EMERGENCY DEBUG CONSOLE (STAYS AT TOP) ---
-    st.warning("🔬 VPS System Diagnostic Console")
+
+def render_modules(student_group):
+    st.header("📚 Learning Modules")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         ws = sh.worksheet("Instructional_Materials")
-        raw_rows = ws.get_all_values()
-        
-        if len(raw_rows) < 2:
-            st.error("The Google Sheet is empty! Please deploy a module from the Teacher Portal.")
+        df = pd.DataFrame(ws.get_all_records())
+
+        if df.empty:
+            st.warning("No data found in the sheet.")
             return
 
-        # Create the DataFrame
-        df = pd.DataFrame(raw_rows[1:], columns=raw_rows[0])
-        
-        # Show exactly what is in the sheet right now
-        with st.expander("🛠️ STEP 1: CLICK HERE TO SEE ALL DATA IN SHEET", expanded=True):
-            st.write("Below is every row the app sees in your Google Sheet:")
-            st.dataframe(df) 
-            st.write("End of data check.")
-
-        # --- NORMALIZATION & FILTERING ---
-        df.columns = [c.strip().lower().replace(" ", "_").replace("(", "").replace(")", "") for c in df.columns]
-        
-        # We search for the group. We use .upper() to avoid "School A" vs "school a" errors.
-        df['group_match'] = df['group'].str.strip().str.upper()
-        target_group = student_group.strip().upper()
-        
-        my_lessons = df[df['group_match'] == target_group]
-
-        st.info(f"Filtering for Group: `{target_group}`")
+        # --- EXACT MAPPING TO YOUR GOOGLE SHEET ---
+        # We filter where the 'Group' column matches the student's group
+        my_lessons = df[df['Group'].str.strip() == student_group]
 
         if my_lessons.empty:
-            st.error(f"❌ No lessons matched for `{target_group}`.")
-            st.write("Groups available in your sheet are:", df['group_match'].unique().tolist())
-        else:
-            st.success(f"✅ Found {len(my_lessons)} lesson(s) for you!")
-            
-            for idx, row in my_lessons.iterrows():
-                with st.container():
-                    st.divider()
-                    st.header(f"📖 {row.get('main_title')}")
-                    st.subheader(row.get('sub_title'))
-                    
-                    # Materials
-                    c1, c2 = st.columns(2)
-                    f_url = str(row.get('file_link', '')).strip()
-                    if f_url.startswith("http"):
-                        c1.link_button("📂 View Lesson PDF/Notes", f_url)
-                    
-                    v_url = str(row.get('video_link', '')).strip()
-                    if v_url.startswith("http"):
-                        c2.video(v_url)
+            st.error(f"No modules assigned to {student_group} yet.")
+            st.write("Teacher has assigned modules to:", df['Group'].unique().tolist())
+            return
 
-                    # 4-Tier Form
-                    st.write("---")
-                    st.markdown(f"**Question:** {row.get('q_text')}")
-                    with st.form(key=f"form_{idx}"):
-                        opts = [row.get('oa'), row.get('ob'), row.get('oc'), row.get('od')]
-                        opts = [o for o in opts if o]
-                        ans = st.radio("Tier 1: Answer", opts)
-                        conf = st.select_slider("Tier 2: Confidence", ["Unsure", "Sure", "Very Sure"])
-                        reason = st.text_area("Tier 3: Reasoning")
-                        r_conf = st.select_slider("Tier 4: Reasoning Confidence", ["Unsure", "Sure", "Very Sure"])
-                        
-                        if st.form_submit_button("Submit"):
-                            log_assessment(st.session_state.user['User_ID'], student_group, row.get('sub_title'), ans, conf, reason, r_conf, "Logged", "")
-                            st.session_state.current_topic = row.get('sub_title')
-                            st.session_state.logic_tree = row.get('socratic_tree')
-                            st.balloons()
+        for idx, row in my_lessons.iterrows():
+            with st.container():
+                st.subheader(f"📖 {row.get('Main_Title')}")
+                st.markdown(f"**Topic:** {row.get('Sub_Title')}")
+                
+                # 1. INSTRUCTIONAL LINKS (PDF & VIDEO)
+                st.markdown("### 📦 Learning Materials")
+                c1, c2 = st.columns(2)
+                
+                # Match: 'File_Links (PDF/Images)'
+                pdf_link = str(row.get('File_Links (PDF/Images)', '')).strip()
+                if pdf_link.startswith("http"):
+                    c1.link_button("📂 View Study PDF", pdf_link, use_container_width=True)
+                
+                # Match: 'Video_Links'
+                vid_link = str(row.get('Video_Links', '')).strip()
+                if vid_link.startswith("http"):
+                    c2.video(vid_link)
+
+                # 2. 4-TIER QUESTION
+                st.divider()
+                st.markdown("### 🧪 Diagnostic Question")
+                
+                # Match: 'Diagnostic_Question'
+                question_body = row.get('Diagnostic_Question', 'Question text missing')
+                st.info(question_body)
+                
+                with st.form(key=f"tier_form_{idx}"):
+                    # Match: Option_A, Option_B, etc.
+                    opts = [row.get('Option_A'), row.get('Option_B'), row.get('Option_C'), row.get('Option_D')]
+                    opts = [o for o in opts if o] # Clean empty options
+                    
+                    col_a, col_b = st.columns(2)
+                    t1 = col_a.radio("Tier 1: Select Answer", opts)
+                    t2 = col_b.select_slider("Tier 2: Confidence", ["Unsure", "Sure", "Very Sure"])
+                    
+                    t3 = st.text_area("Tier 3: Reasoning (Explain your choice)")
+                    t4 = st.select_slider("Tier 4: Reasoning Confidence", ["Unsure", "Sure", "Very Sure"])
+                    
+                    if st.form_submit_button("Submit & Unlock Tutor"):
+                        log_assessment(st.session_state.user['User_ID'], student_group, row.get('Sub_Title'), t1, t2, t3, t4, "Complete", "")
+                        st.session_state.current_topic = row.get('Sub_Title')
+                        st.session_state.logic_tree = row.get('Socratic_Tree')
+                        st.success("✅ Logged! Now go to the Socratic Tutor tab.")
 
     except Exception as e:
-        st.error(f"Critical System Failure: {e}")
+        st.error(f"Error reading Sheet: {e}")
 
-# ... (render_ai_chat and render_progress functions remain identical)
+# ... (rest of functions remain unchanged)
 
 def render_ai_chat(school):
     if "School A" not in school:
