@@ -11,16 +11,15 @@ def show():
     student_group = str(user.get('Group', 'School A')).strip()
     
     st.sidebar.title(f"🎓 {user.get('Name')}")
-    st.sidebar.info(f"Research Group: {student_group}")
+    st.sidebar.info(f"Cohort: {student_group}")
     
-    # Dynamic Menu Labels
-    menu = ["🏠 Dashboard", "📚 Learning Modules", "🤖 Socratic Tutor", "📈 My Progress"]
-    
-    # Handle programmatic navigation
+    # Initialize navigation in session state
     if 'current_nav' not in st.session_state:
         st.session_state.current_nav = "🏠 Dashboard"
         
+    menu = ["🏠 Dashboard", "📚 Learning Modules", "🤖 Socratic Tutor", "📈 My Progress"]
     choice = st.sidebar.radio("Navigation", menu, index=menu.index(st.session_state.current_nav))
+    st.session_state.current_nav = choice
 
     if choice == "🏠 Dashboard":
         render_dashboard(user, student_group)
@@ -33,119 +32,129 @@ def show():
 
 def render_dashboard(user, group):
     st.title(f"🚀 Student Command Center")
-    st.markdown(f"### Welcome back, {user.get('Name')}!")
-    st.info(f"You are currently assigned to the **{group}** research cohort.")
+    st.markdown(f"### Welcome, {user.get('Name')}!")
+    st.info(f"Current Research Track: **{group}**")
     
-    # Quick Summary Cards
     col1, col2 = st.columns(2)
     with col1:
-        st.success("🎯 **Goal:** Complete your assigned diagnostic modules.")
+        st.success("🎯 **Goal:** Complete the Diagnostic Quiz in 'Learning Modules'.")
     with col2:
-        st.warning("🤖 **AI Tutor:** Use the tutor to explain your logic and earn 'Mastery' status.")
+        st.warning("🤖 **Mastery:** After the quiz, discuss your logic with the AI Tutor.")
 
 def render_modules(student_group):
     st.header("📚 Your Learning Path")
     
-    # --- STEP 1: Workflow Handling (If just submitted) ---
+    # --- WORKFLOW: Hide quiz if submitted ---
     if st.session_state.get('last_submission_success'):
-        st.balloons()
-        st.markdown("""
-            <div style="background-color:#d4edda; padding:20px; border-radius:10px; border:1px solid #c3e6cb">
-                <h2 style="color:#155724; margin-top:0;">✅ Submission Successful!</h2>
-                <p style="font-size:18px;">Thank you! Your logic has been recorded. To achieve full mastery of this topic, you should now discuss your reasoning with the Socratic AI Tutor.</p>
-            </div>
-        """, unsafe_allow_safe_html=True)
+        st.success("✅ Thank You! Your answer has been submitted.")
+        st.markdown("### Next Step: Socratic Discussion")
+        st.write("To finish this module, you must now interact with the AI Tutor to validate your reasoning.")
         
-        st.write("")
-        if st.button("💬 Open AI Socratic Tutor Now", use_container_width=True):
+        if st.button("🚀 Proceed to AI Tutor", use_container_width=True):
             st.session_state.current_nav = "🤖 Socratic Tutor"
             st.session_state.last_submission_success = False
             st.rerun()
-        
-        if st.button("⬅️ Back to Modules List"):
-            st.session_state.last_submission_success = False
-            st.rerun()
-        return # Prevents showing the quiz again
+        return 
 
-    # --- STEP 2: Normal Module Listing ---
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         df = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
-        
-        # Filter modules by student group
         modules = df[df['Group'] == student_group]
         
         if modules.empty:
-            st.info("No modules assigned to your group yet.")
+            st.info("No modules available for your group yet.")
             return
 
         for idx, row in modules.iterrows():
-            with st.expander(f"📖 Module {idx+1}: {row['Sub_Title']}", expanded=True):
-                st.markdown(f"#### {row['Main_Title']}")
-                st.write(f"**Objectives:** {row['Learning_Objectives']}")
-                
-                # Space-friendly engineering: Columns for PDF and Video
-                c1, c2 = st.columns([1, 1])
+            q_num = idx + 1
+            with st.expander(f"📖 Module {q_num}: {row['Sub_Title']}", expanded=True):
+                # 1. Resource Layout (Side-by-Side)
+                c1, c2 = st.columns(2)
                 with c1:
-                    st.link_button("📄 View Study Material (PDF)", row['File_Links (PDF/Images)'], use_container_width=True)
+                    st.link_button("📄 View PDF Notes", row['File_Links (PDF/Images)'], use_container_width=True)
                 with c2:
-                    st.link_button("📺 Watch Video Lecture", row['Video_Links'], use_container_width=True)
+                    st.link_button("📺 Watch Video", row['Video_Links'], use_container_width=True)
 
                 st.divider()
-                
-                # Styling the Question: Large, Blue, and Numbered
+
+                # 2. Styled Question (Blue & Large)
                 st.markdown(f"""
-                    <h3 style="color: #1E3A8A; margin-bottom: 5px;">Question {idx+1}:</h3>
-                    <p style="font-size: 20px; font-weight: 500;">{row['Diagnostic_Question']}</p>
-                """, unsafe_allow_safe_html=True)
+                    <div style="background-color:#f0f2f6; padding:15px; border-radius:10px; border-left: 5px solid #1E3A8A;">
+                        <h3 style="color:#1E3A8A; margin:0;">Question {q_num}</h3>
+                        <p style="font-size:18px; font-weight:bold; color:#333;">{row['Diagnostic_Question']}</p>
+                    </div>
+                """, unsafe_allow_html=True) # FIXED PARAMETER NAME HERE
 
-                # Diagnostic Tiers
-                t1 = st.radio("Select your answer:", [row['Option_A'], row['Option_B'], row['Option_C'], row['Option_D']], key=f"t1_{idx}")
-                t2 = st.select_slider("How confident are you in this answer?", 
-                                    options=["Guessing", "Unsure", "Sure", "Very Sure"], key=f"t2_{idx}")
-                t3 = st.text_area("Explain your chemical reasoning (Why did you choose this?):", key=f"t3_{idx}")
-                t4 = st.select_slider("How confident are you in your explanation?", 
-                                    options=["Guessing", "Unsure", "Sure", "Very Sure"], key=f"t4_{idx}")
+                # 3. 4-Tier Assessment
+                ans = st.radio("Choose the correct option:", [row['Option_A'], row['Option_B'], row['Option_C'], row['Option_D']], key=f"q{idx}_t1")
+                conf1 = st.select_slider("How sure are you about this answer?", options=["Guessing", "Unsure", "Sure", "Very Sure"], key=f"q{idx}_t2")
+                reason = st.text_area("Why is this the correct answer scientifically?", key=f"q{idx}_t3")
+                conf2 = st.select_slider("Confidence in your explanation?", options=["Guessing", "Unsure", "Sure", "Very Sure"], key=f"q{idx}_t4")
 
-                if st.button(f"Submit Module {idx+1} Diagnostic", key=f"btn_{idx}"):
-                    # Save to DB
-                    success = log_assessment(
-                        st.session_state.user['User_ID'], 
-                        student_group, 
-                        row['Sub_Title'], t1, t2, t3, t4, "Complete", ""
-                    )
+                if st.button(f"Submit Question {q_num}", use_container_width=True):
+                    success = log_assessment(st.session_state.user['User_ID'], student_group, row['Sub_Title'], ans, conf1, reason, conf2, "Complete", "")
                     if success:
                         st.session_state.current_topic = row['Sub_Title']
                         st.session_state.logic_tree = row['Socratic_Tree']
                         st.session_state.last_submission_success = True
-                        log_temporal_trace(st.session_state.user['User_ID'], "SUBMIT_DIAGNOSTIC", row['Sub_Title'])
+                        log_temporal_trace(st.session_state.user['User_ID'], "QUIZ_COMPLETE", row['Sub_Title'])
                         st.rerun()
 
     except Exception as e:
         st.error(f"Error loading modules: {e}")
 
-def render_ai_chat(student_group):
-    # Only allow experimental groups
-    if student_group not in ["School A", "Exp_A"]:
-        st.warning("⚠️ The Socratic AI Tutor is reserved for the Experimental Research Group.")
-        return
+def render_progress(uid):
+    st.title("📈 Professional Progress Analytics")
+    try:
+        client = get_gspread_client()
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        
+        # Summary Metrics
+        logs = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
+        u_logs = logs[logs['User_ID'].astype(str) == str(uid)]
+        
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Questions Solved", len(u_logs))
+        
+        traces = pd.DataFrame(sh.worksheet("Temporal_Traces").get_all_records())
+        u_turns = len(traces[(traces['User_ID'].astype(str) == str(uid)) & (traces['Event'] == 'AI_TURN')])
+        m2.metric("AI Tutor Turns", u_turns)
+        
+        m3.metric("Current Rank", "Chemistry Explorer")
 
+        if not u_logs.empty:
+            st.subheader("Confidence Evolution")
+            # Map for charting
+            cmap = {"Guessing": 1, "Unsure": 2, "Sure": 3, "Very Sure": 4}
+            u_logs['Initial'] = u_logs['Tier_2 (Confidence_Ans)'].map(cmap)
+            u_logs['Reasoning'] = u_logs['Tier_4 (Confidence_Reas)'].map(cmap)
+            
+            fig = px.line(u_logs, x='Timestamps', y=['Initial', 'Reasoning'], 
+                          title="Metacognitive Confidence (Pre vs Post Reasoning)",
+                          markers=True, template="plotly_white")
+            st.plotly_chart(fig, use_container_width=True)
+
+    except Exception as e:
+        st.error(f"Progress data unavailable: {e}")
+
+def render_ai_chat(group):
+    if group not in ["School A", "Exp_A"]:
+        st.warning("The Socratic Tutor is active for the Experimental Group.")
+        return
     if 'current_topic' not in st.session_state:
-        st.info("👋 Please complete a Diagnostic Check in 'Learning Modules' first to activate the Tutor.")
+        st.info("Please submit a module diagnostic first to start the chat.")
         return
 
-    st.title(f"🤖 Socratic Tutor")
-    st.caption(f"Topic: {st.session_state.current_topic}")
+    st.title("🤖 Socratic AI Tutor")
+    st.caption(f"Active Topic: {st.session_state.current_topic}")
 
-    # Initialize AI
     try:
         api_key = st.secrets.get("GEMINI_API_KEY")
         genai.configure(api_key=api_key)
-        # Using direct model path to fix v1beta 404
-        model = genai.GenerativeModel(model_name='models/gemini-1.5-flash')
-    except Exception as e:
-        st.error(f"AI Connection Error: {e}")
+        model = genai.GenerativeModel('models/gemini-1.5-flash')
+    except:
+        st.error("AI Configuration Error.")
         return
 
     if "messages" not in st.session_state:
@@ -154,71 +163,17 @@ def render_ai_chat(student_group):
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.markdown(m["content"])
 
-    if prompt := st.chat_input("Explain your reasoning to the tutor..."):
+    if prompt := st.chat_input("Explain your logic..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
         
+        sys_p = f"You are a Socratic Tutor. Topic: {st.session_state.current_topic}. Tree: {st.session_state.logic_tree}. Never give answers. Ask one guiding question. Max 2 sentences."
+        
         try:
-            # PhD Level Socratic Scaffolding Prompt
-            system_prompt = (
-                f"You are a PhD Socratic Tutor for Chemistry. Topic: {st.session_state.current_topic}. "
-                f"Pedagogical Scaffolding Logic: {st.session_state.logic_tree}. "
-                "Instructions: Never give the direct answer. If a student is wrong, ask a question "
-                "about the underlying concept. Max 2 sentences per response."
-            )
-            
-            response = model.generate_content(
-                f"{system_prompt}\nStudent: {prompt}",
-                request_options=RequestOptions(api_version='v1')
-            )
-            
+            resp = model.generate_content(f"{sys_p}\nStudent: {prompt}", request_options=RequestOptions(api_version='v1'))
             with st.chat_message("assistant"):
-                st.markdown(response.text)
-                st.session_state.messages.append({"role": "assistant", "content": response.text})
-            
-            log_temporal_trace(st.session_state.user['User_ID'], "AI_CONVERSATION_TURN", st.session_state.current_topic)
-            
+                st.markdown(resp.text)
+                st.session_state.messages.append({"role": "assistant", "content": resp.text})
+            log_temporal_trace(st.session_state.user['User_ID'], "AI_TURN", st.session_state.current_topic)
         except Exception as e:
-            st.error(f"Handshake error: {e}")
-
-def render_progress(uid):
-    st.title("📈 Your Research Progress")
-    
-    try:
-        client = get_gspread_client()
-        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
-        user_df = df[df['User_ID'].astype(str) == str(uid)]
-        
-        if user_df.empty:
-            st.info("Complete your first module to see progress data!")
-            return
-
-        # Professional Metrics Row
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.metric("Modules Attempted", len(user_df['Module_ID'].unique()))
-        with c2:
-            # Calculate total engagement turns from temporal traces
-            traces_df = pd.DataFrame(sh.worksheet("Temporal_Traces").get_all_records())
-            u_traces = traces_df[(traces_df['User_ID'].astype(str) == str(uid)) & (traces_df['Event'] == 'AI_CONVERSATION_TURN')]
-            st.metric("Socratic Engagement", f"{len(u_traces)} Turns")
-        with c3:
-            st.metric("Current Status", "Active Researcher")
-
-        # Confidence Growth Chart
-        st.subheader("Metacognitive Confidence Growth")
-        
-        # Mapping confidence strings to numbers for plotting
-        conf_map = {"Guessing": 1, "Unsure": 2, "Sure": 3, "Very Sure": 4}
-        user_df['Tier_2_Num'] = user_df['Tier_2 (Confidence_Ans)'].map(conf_map)
-        user_df['Tier_4_Num'] = user_df['Tier_4 (Confidence_Reas)'].map(conf_map)
-        
-        fig = px.line(user_df, x='Timestamps', y=['Tier_2_Num', 'Tier_4_Num'], 
-                      labels={"value": "Confidence Level (1-4)", "variable": "Assessment Stage"},
-                      title="Pre-Reasoning vs. Post-Reasoning Confidence",
-                      markers=True)
-        st.plotly_chart(fig, use_container_width=True)
-
-    except Exception as e:
-        st.error(f"Error loading progress: {e}")
+            st.error(f"Connection error: {e}")
