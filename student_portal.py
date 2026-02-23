@@ -110,57 +110,33 @@ def render_modules(student_group):
         st.error(f"Error loading modules: {e}")
 
 def render_ai_chat(group):
-    # Security check for Experimental Group
-    if group not in ["School A", "Exp_A"]:
-        st.warning("The Socratic Tutor is currently enabled for experimental groups only.")
-        return
-    if 'current_topic' not in st.session_state:
-        st.info("Please complete a Learning Module quiz to start the AI discussion.")
+    st.title("🤖 Socratic Tutor Diagnostic")
+
+    # 🔍 TEST 1: Is the secret even there?
+    if "OPENAI_API_KEY" not in st.secrets:
+        st.error("❌ ERROR: The app cannot find 'OPENAI_API_KEY' in your Secrets.")
+        st.info(f"The app only sees these keys: {list(st.secrets.keys())}")
         return
 
-    st.markdown(f"## 🤖 Socratic Assistant (GPT-4o)")
-    st.caption(f"Active Session: {st.session_state.current_topic}")
+    # 🔍 TEST 2: Is the key formatted correctly?
+    my_key = st.secrets["OPENAI_API_KEY"]
+    if not my_key.startswith("sk-"):
+        st.error("❌ ERROR: Your key doesn't start with 'sk-'. Did you paste the wrong string?")
+        return
 
-    # Initialize OpenAI Client
+    # 🔍 TEST 3: Try a real connection
     try:
-        client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-    except Exception as e:
-        st.error("OpenAI Configuration failed. Check your Streamlit Secrets.")
-        return
-
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
-    for m in st.session_state.messages:
-        with st.chat_message(m["role"]): st.markdown(m["content"])
-
-    if prompt := st.chat_input("Explain your logic..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"): st.markdown(prompt)
-        
-        # Socratic prompt construction
-        system_prompt = (
-            f"You are a Socratic chemistry tutor. Topic: {st.session_state.current_topic}. "
-            f"Logic Tree guidelines: {st.session_state.logic_tree}. "
-            "Goal: Scaffolding. Never give the direct answer. Ask ONE probing question to lead the student to the truth."
+        client = OpenAI(api_key=my_key)
+        # We use 'gpt-4o-mini' for the test because it's cheaper/faster
+        test_response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "Hi"}],
+            max_tokens=5
         )
-        
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    *st.session_state.messages
-                ]
-            )
-            ai_content = response.choices[0].message.content
-            with st.chat_message("assistant"):
-                st.markdown(ai_content)
-                st.session_state.messages.append({"role": "assistant", "content": ai_content})
-            
-            log_temporal_trace(st.session_state.user['User_ID'], "AI_INTERACTION", st.session_state.current_topic)
-        except Exception as e:
-            st.error(f"AI sync error: {e}")
+        st.success("✅ CONNECTION SUCCESSFUL! Your $5.00 is active.")
+    except Exception as e:
+        st.error(f"❌ OPENAI REJECTED KEY: {e}")
+        st.warning("If it says 'Insufficient Quota', wait 10 minutes for the $5.00 to process.")
 
 def render_progress(uid):
     st.title("📈 My Learning Progress")
