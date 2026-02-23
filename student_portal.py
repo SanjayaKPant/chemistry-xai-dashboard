@@ -109,35 +109,45 @@ def render_modules(student_group):
     except Exception as e:
         st.error(f"Error loading modules: {e}")
 
-def render_ai_chat(group):
-    st.title("🤖 Socratic Tutor Diagnostic")
+def render_ai_chat(group_name):
+    st.subheader("🤖 Socratic Chemistry Tutor")
+    
+    # Initialize OpenAI Client
+    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-    # 🔍 TEST 1: Is the secret even there?
-    if "OPENAI_API_KEY" not in st.secrets:
-        st.error("❌ ERROR: The app cannot find 'OPENAI_API_KEY' in your Secrets.")
-        st.info(f"The app only sees these keys: {list(st.secrets.keys())}")
-        return
+    # 1. Initialize Chat History if it doesn't exist
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
 
-    # 🔍 TEST 2: Is the key formatted correctly?
-    my_key = st.secrets["OPENAI_API_KEY"]
-    if not my_key.startswith("sk-"):
-        st.error("❌ ERROR: Your key doesn't start with 'sk-'. Did you paste the wrong string?")
-        return
+    # 2. Display existing chat messages
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-    # 🔍 TEST 3: Try a real connection
-    try:
-        client = OpenAI(api_key=my_key)
-        # We use 'gpt-4o-mini' for the test because it's cheaper/faster
-        test_response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": "Hi"}],
-            max_tokens=5
-        )
-        st.success("✅ CONNECTION SUCCESSFUL! Your $5.00 is active.")
-    except Exception as e:
-        st.error(f"❌ OPENAI REJECTED KEY: {e}")
-        st.warning("If it says 'Insufficient Quota', wait 10 minutes for the $5.00 to process.")
+    # 3. Chat Input Space
+    if prompt := st.chat_input("Ask your chemistry question..."):
+        # Add user message to history
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
 
+        # 4. Generate AI Response (Socratic)
+        with st.chat_message("assistant"):
+            # Get the Socratic instructions from your session state/Excel
+            system_prompt = f"You are a Socratic chemistry tutor. {st.session_state.get('logic_tree', 'Guide the student with questions.')}"
+            
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    *st.session_state.messages
+                ]
+            )
+            full_response = response.choices[0].message.content
+            st.markdown(full_response)
+            
+        # Add AI response to history
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
 def render_progress(uid):
     st.title("📈 My Learning Progress")
     st.write(f"Showing activity for User: {uid}")
