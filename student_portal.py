@@ -1,15 +1,14 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import google.generativeai as genai
+from openai import OpenAI
 from database_manager import get_gspread_client, log_assessment, log_temporal_trace
 from datetime import datetime, timedelta
 
-# Helper to get Nepal Time
-def get_local_time():
-    # Nepal is UTC + 5:45
-    nepal_time = datetime.utcnow() + timedelta(hours=5, minutes=45)
-    return nepal_time.strftime("%Y-%m-%d %H:%M:%S")
+# --- HELPERS ---
+def get_nepal_time():
+    """Adjusts UTC (Streamlit Server) to Nepal Time (UTC +5:45)"""
+    return (datetime.utcnow() + timedelta(hours=5, minutes=45)).strftime("%Y-%m-%d %H:%M:%S")
 
 def show():
     if 'user' not in st.session_state: return
@@ -17,7 +16,7 @@ def show():
     student_group = str(user.get('Group', 'School A')).strip()
     
     st.sidebar.title(f"🎓 {user.get('Name')}")
-    st.sidebar.info(f"Cohort: {student_group}")
+    st.sidebar.info(f"Group: {student_group}")
     
     if 'current_nav' not in st.session_state:
         st.session_state.current_nav = "🏠 Dashboard"
@@ -37,19 +36,16 @@ def show():
 
 def render_dashboard(user, group):
     st.title("🚀 Student Command Center")
-    st.markdown(f"### Welcome, {user.get('Name')}!")
-    st.info(f"Current Time (Nepal): {get_local_time()}")
+    st.info(f"Current Time (Nepal): {get_nepal_time()}")
     
     col1, col2 = st.columns(2)
     with col1:
         st.success("🎯 **Step 1:** Complete your Module Quiz.")
     with col2:
-        st.warning("🤖 **Step 2:** Discuss your logic with the AI Tutor.")
+        st.warning("🤖 **Step 2:** Discuss your reasoning with the AI Tutor.")
 
 def render_modules(student_group):
-    # --- VISUAL HIERARCHY TITLES ---
-    st.markdown("<h1 style='text-align: center; color: #0E1117;'>Advanced Chemistry Instructional Portal</h1>", unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align: center; color: #4B5563;'>Metacognitive Learning Path</h3>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>Metacognitive Learning Path</h1>", unsafe_allow_html=True)
     st.divider()
 
     if st.session_state.get('last_submission_success'):
@@ -67,49 +63,41 @@ def render_modules(student_group):
         modules = df[df['Group'] == student_group]
         
         for idx, row in modules.iterrows():
-            q_num = idx + 1
+            st.markdown(f"### 📖 {row['Sub_Title']}")
             
-            # --- SUB-TOPIC (Enhanced Size) ---
-            st.markdown(f"""
-                <div style="background-color:#E1E8F0; padding:10px; border-radius:5px; margin-bottom:15px;">
-                    <h2 style="color:#1E3A8A; margin:0; font-size:26px;">📖 Module {q_num}: {row['Sub_Title']}</h2>
-                </div>
-            """, unsafe_allow_html=True)
-
             # Resources
             c1, c2 = st.columns(2)
             with c1: st.link_button("📄 View PDF Notes", row['File_Links (PDF/Images)'], use_container_width=True)
             with c2: st.link_button("Watch Video", row['Video_Links'], use_container_width=True)
 
-            # --- QUESTION BLOCK (Reduced Size) ---
-            st.markdown(f"""
-                <div style="background-color:#F8FAFC; padding:10px; border-radius:8px; border-left: 4px solid #3B82F6; margin-top:15px;">
-                    <p style="font-size:16px; font-weight:500; color:#1E293B; margin:0;">{row['Diagnostic_Question']}</p>
-                </div>
-            """, unsafe_allow_html=True)
-
             # --- 4 TIERS (STRICT VERTICAL ORDER) ---
-            st.write("")
+            st.write(f"**Question:** {row['Diagnostic_Question']}")
+            
             ans = st.radio(f"**Tier 1: Select your answer**", 
                            [row['Option_A'], row['Option_B'], row['Option_C'], row['Option_D']], key=f"q{idx}_t1")
             
             conf1 = st.select_slider(f"**Tier 2: How confident are you in this answer?**", 
                                      options=["Guessing", "Unsure", "Sure", "Very Sure"], key=f"q{idx}_t2")
             
-            reason = st.text_area(f"**Tier 3: Scientific Reasoning**", 
-                                  placeholder="Explain the chemical principles behind your choice...", key=f"q{idx}_t3")
+            reason = st.text_area(f"**Tier 3: Scientific Reasoning (Required)**", 
+                                  placeholder="Explain the chemical principles...", key=f"q{idx}_t3")
             
             conf2 = st.select_slider(f"**Tier 4: How confident are you in your reasoning?**", 
                                      options=["Guessing", "Unsure", "Sure", "Very Sure"], key=f"q{idx}_t4")
 
-            if st.button(f"Submit Assessment {q_num}", use_container_width=True):
-                # BLOCK SUBMISSION IF REASON IS EMPTY
-                if not reason.strip():
-                    st.error("⚠️ Submission Rejected: You must provide your scientific reasoning in Tier 3.")
-                elif len(reason.strip()) < 10:
-                    st.warning("⚠️ Please provide a more detailed explanation (at least 10 characters).")
+            if st.button(f"Submit Assessment", key=f"btn_{idx}", use_container_width=True):
+                if not reason.strip() or len(reason.strip()) < 10:
+                    st.error("⚠️ Please provide a more detailed scientific reasoning (Tier 3).")
                 else:
-                    success = log_assessment(st.session_state.user['User_ID'], student_group, row['Sub_Title'], ans, conf1, reason, conf2, "Complete", get_local_time())
+                    # Log to Google Sheets
+                    success = log_assessment(
+                        st.session_state.user['User_ID'], 
+                        student_group, 
+                        row['Sub_Title'], 
+                        ans, conf1, reason, conf2, 
+                        "Complete", 
+                        get_nepal_time()
+                    )
                     if success:
                         st.session_state.current_topic = row['Sub_Title']
                         st.session_state.logic_tree = row['Socratic_Tree']
@@ -119,22 +107,75 @@ def render_modules(student_group):
             st.divider()
 
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Error loading modules: {e}")
 
-# Simplified AI Logic for student_portal.py
 def render_ai_chat(group):
-    # ... configuration ...
+    # Security check for Experimental Group
+    if group not in ["School A", "Exp_A"]:
+        st.warning("The Socratic Tutor is currently enabled for experimental groups only.")
+        return
+    if 'current_topic' not in st.session_state:
+        st.info("Please complete a Learning Module quiz to start the AI discussion.")
+        return
+
+    st.markdown(f"## 🤖 Socratic Assistant (GPT-4o)")
+    st.caption(f"Active Session: {st.session_state.current_topic}")
+
+    # Initialize OpenAI Client
+    try:
+        client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    except Exception as e:
+        st.error("OpenAI Configuration failed. Check your Streamlit Secrets.")
+        return
+
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    for m in st.session_state.messages:
+        with st.chat_message(m["role"]): st.markdown(m["content"])
+
     if prompt := st.chat_input("Explain your logic..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"): st.markdown(prompt)
         
-        # Simple, robust call
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content(f"{system_prompt}\nStudent: {prompt}")
+        # Socratic prompt construction
+        system_prompt = (
+            f"You are a Socratic chemistry tutor. Topic: {st.session_state.current_topic}. "
+            f"Logic Tree guidelines: {st.session_state.logic_tree}. "
+            "Goal: Scaffolding. Never give the direct answer. Ask ONE probing question to lead the student to the truth."
+        )
         
-        with st.chat_message("assistant"):
-            st.markdown(response.text)
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    *st.session_state.messages
+                ]
+            )
+            ai_content = response.choices[0].message.content
+            with st.chat_message("assistant"):
+                st.markdown(ai_content)
+                st.session_state.messages.append({"role": "assistant", "content": ai_content})
+            
+            log_temporal_trace(st.session_state.user['User_ID'], "AI_INTERACTION", st.session_state.current_topic)
+        except Exception as e:
+            st.error(f"AI sync error: {e}")
 
 def render_progress(uid):
     st.title("📈 My Learning Progress")
-    st.write("Tracking your mastery and confidence over time.")
-    # Add your plotly chart logic here as needed
+    st.write(f"Showing activity for User: {uid}")
+    
+    try:
+        client = get_gspread_client()
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
+        user_data = df[df['User_ID'].astype(str) == str(uid)]
+        
+        if not user_data.empty:
+            # Simple chart of confidence over time
+            st.dataframe(user_data[['Timestamps', 'Module_ID', 'Tier_2 (Confidence_Ans)', 'Tier_4 (Confidence_Reas)']])
+        else:
+            st.info("No assessment data recorded yet.")
+    except Exception as e:
+        st.error(f"Could not load progress: {e}")
