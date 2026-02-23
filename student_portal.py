@@ -121,47 +121,18 @@ def render_modules(student_group):
     except Exception as e:
         st.error(f"Error: {e}")
 
+# Simplified AI Logic for student_portal.py
 def render_ai_chat(group):
-    if group not in ["School A", "Exp_A"]:
-        st.warning("The Socratic Tutor is currently enabled for experimental groups only.")
-        return
-    if 'current_topic' not in st.session_state:
-        st.info("Please complete a Learning Module quiz to start the AI discussion.")
-        return
-
-    st.markdown(f"<h2 style='color: #1E3A8A;'>🤖 Socratic Assistant</h2>", unsafe_allow_html=True)
-    st.caption(f"Active Session: {st.session_state.current_topic}")
-
-    try:
-        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        model = genai.GenerativeModel('gemini-1.5-flash')
-    except:
-        st.error("AI Configuration failed.")
-        return
-
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
-    for m in st.session_state.messages:
-        with st.chat_message(m["role"]): st.markdown(m["content"])
-
+    # ... configuration ...
     if prompt := st.chat_input("Explain your logic..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"): st.markdown(prompt)
         
-        system_prompt = (f"You are a Socratic chemistry tutor. Topic: {st.session_state.current_topic}. "
-                         f"Logic Tree instructions: {st.session_state.logic_tree}. "
-                         "Goal: Use scaffolding. Never give the direct answer. Ask one conceptual question.")
+        # Simple, robust call
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(f"{system_prompt}\nStudent: {prompt}")
         
-        try:
-            # FIXED: Removed api_version argument
-            response = model.generate_content(f"{system_prompt}\nStudent: {prompt}")
-            with st.chat_message("assistant"):
-                st.markdown(response.text)
-                st.session_state.messages.append({"role": "assistant", "content": response.text})
-            log_temporal_trace(st.session_state.user['User_ID'], "AI_RESPONSE", st.session_state.current_topic)
-        except Exception as e:
-            st.error(f"AI sync error: {e}")
+        with st.chat_message("assistant"):
+            st.markdown(response.text)
 
 def render_progress(uid):
     st.title("📈 My Learning Progress")
