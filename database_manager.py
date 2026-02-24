@@ -20,16 +20,18 @@ def get_gspread_client():
     creds = get_creds()
     return gspread.authorize(creds) if creds else None
 
-# --- PhD RESEARCH LOGGERS ---
+# --- PhD RESEARCH LOGGERS (12 COLUMNS) ---
 
 def log_assessment(user_id, group, module_id, t1, t2, t3, t4, status, timestamp, t5="", t6="", diag_res="Pending", misc_tag="None"):
-    """Logs the 12-column Metacognitive Journey."""
+    """
+    Logs the full 6-Tier journey.
+    Columns: Timestamps, User_ID, Group, Module_ID, T1, T2, T3, T4, T5, T6, Result, Tag
+    """
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         ws = sh.worksheet("Assessment_Logs")
         
-        # Order: Timestamps, User_ID, Group, Module_ID, T1, T2, T3, T4, T5, T6, Result, Tag
         row = [timestamp, user_id, group, module_id, t1, t2, t3, t4, t5, t6, diag_res, misc_tag]
         ws.append_row(row)
         return True
@@ -48,7 +50,20 @@ def log_temporal_trace(user_id, event_type, details):
     except:
         return False
 
-# --- KEEP YOUR EXISTING LOGIN/MATERIAL FUNCTIONS BELOW ---
+# --- TEACHER PORTAL SUPPORT ---
+def save_bulk_concepts(data_list):
+    """Required by teacher_portal to upload instructional materials."""
+    try:
+        client = get_gspread_client()
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        ws = sh.worksheet("Instructional_Materials")
+        ws.append_rows(data_list)
+        return True
+    except Exception as e:
+        st.error(f"Bulk Save Error: {e}")
+        return False
+
+# --- AUTH & UTILS ---
 def check_login(user_id):
     client = get_gspread_client()
     try:
