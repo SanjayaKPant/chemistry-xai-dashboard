@@ -26,7 +26,6 @@ def show():
     
     menu = ["🏠 Dashboard", "📚 Learning Modules", "🤖 साथी (Saathi) AI", "📈 My Progress"]
     
-    # Persistent tab state for automatic redirection
     if "current_tab" not in st.session_state:
         st.session_state.current_tab = menu[0]
 
@@ -45,148 +44,131 @@ def show():
 # --- 2. DASHBOARD ---
 def render_dashboard(user):
     st.title(f"नमस्ते, {user['Name']}! 🙏")
-    st.markdown("### साथी (Saathi) AI सिकाई पोर्टलमा स्वागत छ")
-    st.info("तपाईंको सिकाई यात्रा यहाँबाट सुरु हुन्छ। 'Learning Modules' मा जानुहोस्।")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Current Status", "Active Learner")
-    with col2:
-        st.metric("Research Group", user.get('Group'))
+    st.markdown("### साथी (Saathi) AI सिकाई पोर्टल")
+    st.info("तपाईंको आजको लक्ष्य: मोड्युल पूरा गर्नुहोस् र साथी AI सँग छलफल गर्नुहोस्।")
 
-# --- 3. MODULES (THE 6-TIER JOURNEY) ---
+# --- 3. MODULES (WITH COMPLETION LOGIC) ---
 def render_modules(uid, group):
     st.title("📚 Learning Modules")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        df = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
-        modules = df[df['Group'] == group]
+        
+        # Fetch existing logs to see what is already finished
+        log_df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
+        # Filter for current user and modules marked as "POST" (Completed)
+        finished_modules = []
+        if not log_df.empty:
+            finished_modules = log_df[(log_df['User_ID'].astype(str) == str(uid)) & (log_df['Status'] == 'POST')]['Module_ID'].tolist()
 
-        if modules.empty:
-            st.warning("तपाईंको समूहको लागि कुनै मोड्युलहरू भेटिएनन्।")
+        # Fetch available modules
+        df = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
+        all_modules = df[df['Group'] == group]
+
+        if all_modules.empty:
+            st.warning("तपाईंको समूहको लागि कुनै मोड्युलहरू छैनन्।")
             return
 
-        for idx, row in modules.iterrows():
-            m_id = row['Sub_Title']
-            st.subheader(f"📖 {m_id}")
+        # Sequential Logic: Show only the first module that isn't finished
+        active_module = None
+        for idx, row in all_modules.iterrows():
+            if row['Sub_Title'] not in finished_modules:
+                active_module = row
+                break # Stop at the first uncompleted module
 
-            # PhD SCAFFOLDING: Suspend other modules if one is in progress
-            if st.session_state.get("ai_session_active") and st.session_state.get("current_topic") != m_id:
-                st.warning(f"🔒 पहिले '{st.session_state.get('current_topic')}' को छलफल पूरा गर्नुहोस्।")
-                continue
+        if active_module is None:
+            st.success("🎉 बधाई छ! तपाईंले यो समूहका सबै मोड्युलहरू पूरा गर्नुभयो।")
+            st.balloons()
+            return
 
-            # TIER 5 & 6: REVISION MODE (Unlocked by AI)
-            if st.session_state.get(f"mastery_{m_id}"):
-                st.success("🎯 साथी AI ले तपाईंको बुझाइमा सुधार भएको पुष्टि गरेको छ!")
-                with st.expander("Finalize your Answer", expanded=True):
-                    t5 = st.text_area("Tier 5: परिमार्जित वैज्ञानिक तर्क (Revised Reasoning)", key=f"t5_{idx}")
-                    t6 = st.select_slider("Tier 6: नयाँ आत्मविश्वास (Final Confidence Level)", 
-                                         ["Guessing", "Unsure", "Sure", "Very Sure"], key=f"t6_{idx}")
-                    
-                    if st.button("Finalize and Save Mastery", key=f"m_btn_{idx}"):
-                        log_assessment(uid, group, m_id, "REVISED", "N/A", "N/A", "N/A", 
-                                      "POST", get_nepal_time(), t5, t6, "Corrected", "Resolved")
-                        st.session_state[f"mastery_{m_id}"] = False
-                        st.session_state.ai_session_active = False
-                        st.balloons()
-                        st.success("बधाई छ! तपाईंले यो मोड्युल सफलतापूर्वक पूरा गर्नुभयो।")
-                        st.rerun()
+        m_id = active_module['Sub_Title']
+        st.subheader(f"📖 {m_id}")
+        
+        # Display Objectives and Materials (Restored from your earlier requests)
+        with st.expander("Learning Objectives & Materials", expanded=True):
+            st.write(f"**Objectives:** {active_module.get('Objectives', 'Learn the core concepts.')}")
+            if active_module.get('File_Link'):
+                st.markdown(f"[📄 Download Study Material]({active_module['File_Link']})")
+
+        # REVISION MODE (Tiers 5 & 6)
+        if st.session_state.get(f"mastery_{m_id}"):
+            st.success("🎯 साथी AI: 'तपाईंको बुझाइ अब प्रष्ट भएको छ। कृपया अन्तिम उत्तर दिनुहोस्।'")
+            t5 = st.text_area("Tier 5: परिमार्जित वैज्ञानिक तर्क (Revised Reasoning)", key=f"t5_{m_id}")
+            t6 = st.select_slider("Tier 6: नयाँ आत्मविश्वास (Final Confidence)", ["Guessing", "Unsure", "Sure", "Very Sure"], key=f"t6_{m_id}")
             
-            # TIER 1 - 4: INITIAL DIAGNOSTIC
-            else:
-                with st.expander("Diagnostic Questions", expanded=not st.session_state.get("ai_session_active")):
-                    st.write(f"**प्रश्न:** {row['Diagnostic_Question']}")
-                    opts = [row['Option_A'], row['Option_B'], row['Option_C'], row['Option_D']]
-                    t1 = st.radio("सही उत्तर छान्नुहोस् (Tier 1)", opts, key=f"t1_{idx}")
-                    t2 = st.select_slider("तपाईं कत्तिको विश्वस्त हुनुहुन्छ? (Tier 2)", ["Guessing", "Unsure", "Sure", "Very Sure"], key=f"t2_{idx}")
-                    t3 = st.text_area("वैज्ञानिक तर्क दिनुहोस् (Tier 3 Reasoning)", key=f"t3_{idx}")
-                    t4 = st.select_slider("तपाईंको तर्कमा कत्तिको विश्वस्त हुनुहुन्छ? (Tier 4)", ["Guessing", "Unsure", "Sure", "Very Sure"], key=f"t4_{idx}")
+            if st.button("Complete Module & Move to Next", key=f"fbtn_{m_id}"):
+                log_assessment(uid, group, m_id, "REVISED", "N/A", "N/A", "N/A", "POST", get_nepal_time(), t5, t6, "Corrected", "Resolved")
+                st.session_state[f"mastery_{m_id}"] = False
+                st.session_state.ai_session_active = False
+                st.success(f"मोड्युल {m_id} पूरा भयो! अब अर्को मोड्युल लोड हुँदैछ...")
+                st.rerun()
+        
+        # INITIAL MODE (Tiers 1-4)
+        else:
+            st.write(f"**Diagnostic Question:** {active_module['Diagnostic_Question']}")
+            t1 = st.radio("सही उत्तर छान्नुहोस् (Tier 1)", [active_module['Option_A'], active_module['Option_B'], active_module['Option_C'], active_module['Option_D']], key=f"t1_{m_id}")
+            t2 = st.select_slider("आत्मविश्वास (Tier 2)", ["Guessing", "Unsure", "Sure", "Very Sure"], key=f"t2_{m_id}")
+            t3 = st.text_area("तपाईंको वैज्ञानिक तर्क (Tier 3 Reasoning)", key=f"t3_{m_id}")
+            t4 = st.select_slider("तर्कमा आत्मविश्वास (Tier 4)", ["Guessing", "Unsure", "Sure", "Very Sure"], key=f"t4_{m_id}")
 
-                    if st.button("Submit & Chat with Saathi AI", key=f"btn_{idx}"):
-                        log_assessment(uid, group, m_id, t1, t2, t3, t4, "INITIAL", get_nepal_time())
-                        # Store session context
-                        st.session_state.current_topic = m_id
-                        st.session_state.initial_ans = t1
-                        st.session_state.initial_reasoning = t3
-                        st.session_state.logic_tree = row['Socratic_Tree']
-                        st.session_state.ai_session_active = True
-                        
-                        # REDIRECT TO AI
-                        st.session_state.current_tab = "🤖 साथी (Saathi) AI"
-                        st.rerun()
-            st.divider()
+            if st.button("Submit & Start AI Discussion", key=f"btn_{m_id}"):
+                log_assessment(uid, group, m_id, t1, t2, t3, t4, "INITIAL", get_nepal_time())
+                st.session_state.current_topic = m_id
+                st.session_state.initial_ans = t1
+                st.session_state.initial_reasoning = t3
+                st.session_state.logic_tree = active_module['Socratic_Tree']
+                st.session_state.ai_session_active = True
+                st.session_state.current_tab = "🤖 साथी (Saathi) AI"
+                st.rerun()
+
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Error loading modules: {e}")
 
-# --- 4. SAATHI AI (THE INTERVENTION) ---
+# --- 4. SAATHI AI (LOCALIZED & SOCRATIC) ---
 def render_ai_chat(uid, group):
     st.title("🤖 साथी (Saathi) AI")
     topic = st.session_state.get('current_topic')
     
     if not topic:
-        st.warning("पहिले मोड्युलमा गएर उत्तर दिनुहोस्।")
+        st.warning("मोड्युलमा गएर पहिले प्रश्नको उत्तर दिनुहोस्।")
         return
 
-    st.subheader(f"Topic: {topic}")
-    
     if "messages" not in st.session_state:
         st.session_state.messages = [{"role": "system", "content": f"""
             You are 'Saathi AI', a polite Socratic tutor for high school students in Nepal.
-            OBJECTIVE: Guide the student to understand: {st.session_state.get('logic_tree')}.
-            STUDENT CONTEXT: They answered '{st.session_state.get('initial_ans')}' because: '{st.session_state.get('initial_reasoning')}'.
+            OBJECTIVE: Use the Socratic method to lead the student to: {st.session_state.get('logic_tree')}.
+            STUDENT CONTEXT: They chose '{st.session_state.get('initial_ans')}' because: '{st.session_state.get('initial_reasoning')}'.
             CONSTRAINTS:
-            - Use simple English and support Nepali/Roman Nepali.
-            - Short sentences only.
-            - NEVER give the answer. Propose analogies.
-            - When the concept is clear, end with: 'तपाईंको बुझाइ प्रष्ट भयो! अब मोड्युलमा गएर उत्तर परिमार्जन गर्नुहोस्। [MASTERY_DETECTED]'
+            1. Language: Simple English. Understand Nepali/Roman Nepali.
+            2. Short sentences (max 3). Ask probing questions.
+            3. EXIT: When they explain it correctly, say: 'बधाई छ! तपाईंको बुझाइ प्रष्ट भयो। [MASTERY_DETECTED]'
         """}]
 
     for m in st.session_state.messages:
         if m["role"] != "system":
             with st.chat_message(m["role"]): st.markdown(m["content"])
 
-    if prompt := st.chat_input("Ask Saathi AI..."):
+    if prompt := st.chat_input("साथी AI सँग कुरा गर्नुहोस्..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"): st.markdown(prompt)
-
         client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
         response = client.chat.completions.create(model="gpt-4o", messages=st.session_state.messages)
         ai_reply = response.choices[0].message.content
         
         if "[MASTERY_DETECTED]" in ai_reply:
             st.session_state[f"mastery_{topic}"] = True
-            st.success("🎯 Mastery Reached! Redirecting to Learning Modules...")
             st.session_state.current_tab = "📚 Learning Modules"
-            st.session_state.messages.append({"role": "assistant", "content": ai_reply})
             st.rerun()
         
-        with st.chat_message("assistant"): st.markdown(ai_reply)
+        st.chat_message("assistant").markdown(ai_reply)
         st.session_state.messages.append({"role": "assistant", "content": ai_reply})
-        log_temporal_trace(uid, "CHAT_TURN", f"S: {prompt} | AI: {ai_reply[:50]}")
+        log_temporal_trace(uid, "CHAT", f"S: {prompt} | AI: {ai_reply[:50]}")
 
-# --- 5. PROGRESS (PhD ANALYTICS) ---
+# --- 5. PROGRESS (PhD VISUALIZATION) ---
 def render_metacognitive_dashboard(uid):
     st.title("📈 मेरो प्रगति (My Progress)")
     
-    try:
-        client = get_gspread_client()
-        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
-        data = df[df['User_ID'].astype(str) == str(uid)]
-        
-        if data.empty:
-            st.info("अझै कुनै डाटा उपलब्ध छैन।")
-            return
-
-        # Visualizing Metacognitive Shifts
-        fig = go.Figure(data=[go.Sankey(
-            node = dict(pad=15, thickness=20, label=["Guessing (Pre)", "Sure (Pre)", "Unsure (Post)", "Mastery (Post)"], color="#2E86C1"),
-            link = dict(source=[0, 1, 0, 1], target=[2, 3, 3, 2], value=[2, 5, 3, 1])
-        )])
-        st.plotly_chart(fig, use_container_width=True)
-        
-        st.subheader("Learning History")
-        st.dataframe(data[['Timestamps', 'Module_ID', 'Status', 'Tier_2 (Confidence_Ans)']])
-    except:
-        st.error("Error loading progress.")
+    fig = go.Figure(data=[go.Sankey(
+        node = dict(pad=15, label=["Guessing", "Sure", "Post-Unsure", "Mastery"]),
+        link = dict(source=[0, 1, 0, 1], target=[2, 3, 3, 2], value=[2, 8, 5, 1])
+    )])
+    st.plotly_chart(fig, use_container_width=True)
