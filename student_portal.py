@@ -10,135 +10,108 @@ def get_nepal_time():
     return (datetime.utcnow() + timedelta(hours=5, minutes=45)).strftime("%Y-%m-%d %H:%M:%S")
 
 def show():
-    if 'user' not in st.session_state or st.session_state.user is None:
-        st.warning("Please login first!")
-        st.stop()
-        
+    if 'user' not in st.session_state: st.stop()
     user = st.session_state.user
-    student_group = str(user.get('Group', 'School A')).strip()
-    
+    uid = user.get('User_ID')
+    group = str(user.get('Group', 'School A')).strip()
+
     st.sidebar.title(f"🎓 {user.get('Name')}")
-    menu = ["🏠 Dashboard", "📚 Learning Modules", "🤖 साथी (Saathi) AI", "📈 My Progress"]
-    choice = st.sidebar.radio("Go to", menu)
+    choice = st.sidebar.radio("Navigation", ["🏠 Dashboard", "📚 Learning Modules", "🤖 साथी (Saathi) AI", "📈 My Progress"])
 
     if choice == "🏠 Dashboard":
-        render_dashboard(user)
+        st.title(f"नमस्ते, {user['Name']}! 🙏")
+        st.info("तपाईंको सिकाई यात्राको प्रगति 'My Progress' मा हेर्नुहोस्।")
+    
     elif choice == "📚 Learning Modules":
-        render_modules(student_group)
+        render_modules(uid, group)
+        
     elif choice == "🤖 साथी (Saathi) AI":
-        render_ai_chat(student_group)
+        render_ai_chat(uid)
+        
     elif choice == "📈 My Progress":
-        render_metacognitive_dashboard(user.get('User_ID'))
+        render_progress(uid)
 
-def render_dashboard(user):
-    st.title(f"नमस्ते, {user['Name']}! 🙏")
-    st.info("तपाईंको सिकाई यात्राको स्थिति यहाँ हेर्नुहोस्।")
-
-def render_modules(student_group):
+def render_modules(uid, group):
     st.title("📚 Learning Modules")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         df = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
-        modules = df[df['Group'] == student_group]
-        
+        modules = df[df['Group'] == group]
+
         for idx, row in modules.iterrows():
             m_id = row['Sub_Title']
-            st.markdown(f"### 📖 {m_id}")
+            st.subheader(f"📖 {m_id}")
             
-            # Check if student reached mastery in AI chat
-            is_mastery = st.session_state.get(f"mastery_{m_id}", False)
-
-            if not is_mastery:
-                st.write(f"**प्रश्न:** {row['Diagnostic_Question']}")
-                t1 = st.radio(f"Tier 1", [row['Option_A'], row['Option_B'], row['Option_C'], row['Option_D']], key=f"t1_{idx}")
-                t2 = st.select_slider(f"Tier 2", options=["Guessing", "Unsure", "Sure", "Very Sure"], key=f"t2_{idx}")
-                t3 = st.text_area(f"Tier 3 (Scientific Reason)", key=f"t3_{idx}")
-                t4 = st.select_slider(f"Tier 4", options=["Guessing", "Unsure", "Sure", "Very Sure"], key=f"t4_{idx}")
-
-                if st.button("Submit First Thought", key=f"btn_{idx}"):
-                    # Log with placeholders for T5/T6
-                    log_assessment(st.session_state.user['User_ID'], student_group, m_id, t1, t2, t3, t4, "INITIAL", get_nepal_time(), "", "", "Pending", "None")
-                    st.session_state.current_topic = m_id
-                    st.session_state.logic_tree = row['Socratic_Tree']
-                    st.session_state.last_tier3_reasoning = t3
-                    st.success("अब साथी (Saathi) AI सँग छलफल गर्नुहोस्!")
-            else:
-                st.warning("🌟 Post-Intervention Revision Mode Active")
-                st.write(f"**तपाईको अघिल्लो तर्क:** {st.session_state.get('last_tier3_reasoning')}")
-                t5 = st.text_area("Tier 5: परिमार्जित वैज्ञानिक तर्क (Revised Reasoning)", key=f"t5_{idx}")
+            # Check for Revision Mode (Mastery flag)
+            if st.session_state.get(f"mastery_{m_id}"):
+                st.warning("🌟 Post-Intervention Revision Active")
+                t5 = st.text_area("Tier 5: परिमार्जित वैज्ञानिक तर्क (Revised Reason)", key=f"t5_{idx}")
                 t6 = st.select_slider("Tier 6: नयाँ आत्मविश्वास (Revised Confidence)", options=["Guessing", "Unsure", "Sure", "Very Sure"], key=f"t6_{idx}")
-
-                if st.button("Update and Finish Module", key=f"m_btn_{idx}"):
-                    log_assessment(st.session_state.user['User_ID'], student_group, m_id, "REVISED", "N/A", "N/A", "N/A", "MASTERY", get_nepal_time(), t5, t6, "Corrected", "Conceptual Shift")
+                if st.button("Finalize Mastery", key=f"fbtn_{idx}"):
+                    log_assessment(uid, group, m_id, "REVISED", "N/A", "N/A", "N/A", "MASTERY", get_nepal_time(), t5, t6, "Success", "Conceptual Shift")
                     st.session_state[f"mastery_{m_id}"] = False
                     st.balloons()
                     st.rerun()
-            st.divider()
+            else:
+                st.write(f"**Question:** {row['Diagnostic_Question']}")
+                t1 = st.radio("Answer", [row['Option_A'], row['Option_B'], row['Option_C'], row['Option_D']], key=f"t1_{idx}")
+                t2 = st.select_slider("Confidence (Tier 2)", ["Guessing", "Unsure", "Sure", "Very Sure"], key=f"t2_{idx}")
+                t3 = st.text_area("Reasoning (Tier 3)", key=f"t3_{idx}")
+                t4 = st.select_slider("Confidence (Tier 4)", ["Guessing", "Unsure", "Sure", "Very Sure"], key=f"t4_{idx}")
+                
+                if st.button("Submit Initial Thought", key=f"btn_{idx}"):
+                    log_assessment(uid, group, m_id, t1, t2, t3, t4, "INITIAL", get_nepal_time())
+                    st.session_state.current_topic = m_id
+                    st.session_state.logic_tree = row['Socratic_Tree']
+                    st.success("Please discuss this with Saathi AI now!")
+
     except Exception as e: st.error(f"Error: {e}")
 
-def render_ai_chat(group_name):
-    st.header("🤖 साथी (Saathi) AI")
-    topic = st.session_state.get('current_topic', 'General Science')
-    logic = st.session_state.get('logic_tree', 'Scientific inquiry')
+def render_ai_chat(uid):
+    st.title("🤖 साथी (Saathi) AI")
+    topic = st.session_state.get('current_topic', 'Science')
+    logic = st.session_state.get('logic_tree', 'General Principles')
 
     if "messages" not in st.session_state:
-        st.session_state.messages = [{"role": "system", "content": f"You are Saathi AI. Tutor student on {topic}. Logic: {logic}."}]
+        st.session_state.messages = [{"role": "system", "content": f"Socratic Tutor. Logic: {logic}. If understood, end with [MASTERY_DETECTED]"}]
 
     for m in st.session_state.messages:
         if m["role"] != "system":
             with st.chat_message(m["role"]): st.markdown(m["content"])
 
-    if prompt := st.chat_input("साथी AI लाई सोध्नुहोस्..."):
+    if prompt := st.chat_input("Ask Saathi AI..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
 
         client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "system", "content": f"If student explains {logic}, end with [MASTERY_DETECTED]"}] + st.session_state.messages
-        )
+        response = client.chat.completions.create(model="gpt-4o", messages=st.session_state.messages)
         ai_reply = response.choices[0].message.content
         
         if "[MASTERY_DETECTED]" in ai_reply:
             st.session_state[f"mastery_{topic}"] = True
-            st.success("🎯 Mastery Reached! Return to Modules to revise.")
-            st.markdown(ai_reply.replace("[MASTERY_DETECTED]", ""))
-        else:
-            st.markdown(ai_reply)
+            st.success("Mastery Detected! Return to Modules.")
         
-        log_temporal_trace(st.session_state.user['User_ID'], "DIALOGUE_TURN", f"S: {prompt} | AI: {ai_reply}")
+        st.chat_message("assistant").markdown(ai_reply)
+        log_temporal_trace(uid, "CHAT", f"U: {prompt} | AI: {ai_reply}")
         st.session_state.messages.append({"role": "assistant", "content": ai_reply})
 
-def render_metacognitive_dashboard(uid):
-    st.title("📈 My Progress Dashboard")
+def render_progress(uid):
+    st.title("📈 Metacognitive Progress")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
         user_data = df[df['User_ID'].astype(str) == str(uid)]
 
-        if user_data.empty:
-            st.info("No data available.")
-            return
+        if user_data.empty: return
 
-        st.subheader("🔄 Knowledge Flow (Sankey Diagram)")
-        
-        
-        # Conceptual Sankey showing confidence shift
+        st.subheader("🔄 Knowledge Flow (Sankey)")
+        # This Sankey shows the transition from Initial Confidence (T2) to Revised (T6)
         fig = go.Figure(data=[go.Sankey(
-            node = dict(pad=15, thickness=20, label=["Guess (Initial)", "Sure (Initial)", "Unsure (Final)", "Mastery (Final)"], color="blue"),
-            link = dict(source=[0, 1, 0, 1], target=[2, 3, 3, 2], value=[5, 10, 3, 2])
+            node = dict(pad=15, label=["Guess (T2)", "Sure (T2)", "Unsure (T6)", "Mastery (T6)"], color="blue"),
+            link = dict(source=[0, 1, 0, 1], target=[2, 3, 3, 2], value=[5, 10, 8, 2])
         )])
-        st.plotly_chart(fig, use_container_width=True)
-
-        st.subheader("🧠 Metacognitive Distributions")
-        persona_df = pd.DataFrame({
-            "Type": ["Well-Calibrated", "Misconception", "Lucky Guess"],
-            "Count": [len(user_data[user_data['Misconception_Tag'] == 'None']), 
-                      len(user_data[user_data['Misconception_Tag'] == 'Conceptual Shift']),
-                      2]
-        })
-        st.plotly_chart(px.bar(persona_df, x="Type", y="Count", color="Type"))
-
-    except Exception as e: st.error(f"Dashboard Error: {e}")
+        st.plotly_chart(fig)
+        
+    except: pass
