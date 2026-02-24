@@ -7,11 +7,9 @@ from datetime import datetime, timedelta
 
 # --- HELPERS ---
 def get_nepal_time():
-    """Adjusts UTC (Streamlit Server) to Nepal Time (UTC +5:45)"""
     return (datetime.utcnow() + timedelta(hours=5, minutes=45)).strftime("%Y-%m-%d %H:%M:%S")
 
 def show():
-    """Main entry point called by main_app.py"""
     if 'user' not in st.session_state or st.session_state.user is None:
         st.warning("Please login first!")
         st.stop()
@@ -20,46 +18,22 @@ def show():
     student_group = str(user.get('Group', 'School A')).strip()
     
     st.sidebar.title(f"🎓 {user.get('Name')}")
-    st.sidebar.info(f"Group: {student_group}")
-    
-    if 'current_nav' not in st.session_state:
-        st.session_state.current_nav = "🏠 Dashboard"
-        
     menu = ["🏠 Dashboard", "📚 Learning Modules", "🤖 साथी (Saathi) AI", "📈 My Progress"]
-    choice = st.sidebar.radio("Navigation", menu, index=menu.index(st.session_state.current_nav))
-    st.session_state.current_nav = choice
+    choice = st.sidebar.radio("Navigation", menu)
 
     if choice == "🏠 Dashboard":
-        render_dashboard(user, student_group)
+        render_dashboard(user)
     elif choice == "📚 Learning Modules":
         render_modules(student_group)
     elif choice == "🤖 साथी (Saathi) AI":
         render_ai_chat(student_group)
     elif choice == "📈 My Progress":
-        render_progress(user.get('User_ID'))
+        render_metacognitive_dashboard(user.get('User_ID'))
 
-def render_dashboard(user, group):
-    st.title("🚀 Student Command Center")
-    st.info(f"Current Time (Nepal): {get_nepal_time()}")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.success("🎯 **चरण १ (Step 1):** आफ्नो मोड्युल क्विज पूरा गर्नुहोस्। (Complete your Module Quiz.)")
-    with col2:
-        st.warning("🤖 **चरण २ (Step 2):** साथी AI सँग छलफल गर्नुहोस्। (Discuss with Saathi AI.)")
-
+# --- 1. MODULES WITH "REVISION MODE" (TIERS 5 & 6) ---
 def render_modules(student_group):
-    st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>Metacognitive Learning Path</h1>", unsafe_allow_html=True)
-    st.divider()
-
-    if st.session_state.get('last_submission_success'):
-        st.success("✅ Assessment Submitted Successfully!")
-        if st.button("🚀 साथी AI सँग कुरा गर्नुहोस् (Chat with Saathi AI)", use_container_width=True):
-            st.session_state.current_nav = "🤖 साथी (Saathi) AI"
-            st.session_state.last_submission_success = False
-            st.rerun()
-        return 
-
+    st.title("📚 Learning Modules")
+    
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
@@ -69,113 +43,101 @@ def render_modules(student_group):
         for idx, row in modules.iterrows():
             st.markdown(f"### 📖 {row['Sub_Title']}")
             
-            c1, c2 = st.columns(2)
-            with c1: st.link_button("📄 View PDF Notes", row['File_Links (PDF/Images)'], use_container_width=True)
-            with c2: st.link_button("Watch Video", row['Video_Links'], use_container_width=True)
+            # Check if student already submitted Tier 1-4
+            is_revision = st.session_state.get(f"revizing_{row['Sub_Title']}", False)
 
-            st.write(f"**Question:** {row['Diagnostic_Question']}")
-            
-            # --- BILINGUAL 4-TIER ASSESSMENT ---
-            ans = st.radio(f"**Tier 1: सही उत्तर छान्नुहोस् (Select answer)**", 
-                           [row['Option_A'], row['Option_B'], row['Option_C'], row['Option_D']], key=f"q{idx}_t1")
-            
-            conf1 = st.select_slider(f"**Tier 2: तपाईं यो उत्तरमा कत्तिको विश्वस्त हुनुहुन्छ? (Confidence)**", 
-                                     options=["Guessing", "Unsure", "Sure", "Very Sure"], key=f"q{idx}_t2")
-            
-            reason = st.text_area(f"**Tier 3: वैज्ञानिक तर्क (Scientific Reasoning - Required)**", 
-                                  placeholder="यसको पछाडिको वैज्ञानिक कारण लेख्नुहोस्...", key=f"q{idx}_t3")
-            
-            conf2 = st.select_slider(f"**Tier 4: तपाईं आफ्नो तर्कमा कत्तिको विश्वस्त हुनुहुन्छ? (Reasoning Confidence)**", 
-                                     options=["Guessing", "Unsure", "Sure", "Very Sure"], key=f"q{idx}_t4")
+            if not is_revision:
+                # --- STANDARD 4-TIER START ---
+                st.write(f"**Question:** {row['Diagnostic_Question']}")
+                ans = st.radio(f"Tier 1: सही उत्तर (Answer)", [row['Option_A'], row['Option_B'], row['Option_C'], row['Option_D']], key=f"t1_{idx}")
+                conf1 = st.select_slider(f"Tier 2: आत्मविश्वास (Confidence)", options=["Guessing", "Unsure", "Sure", "Very Sure"], key=f"t2_{idx}")
+                reason = st.text_area(f"Tier 3: वैज्ञानिक तर्क (Reasoning)", key=f"t3_{idx}")
+                conf2 = st.select_slider(f"Tier 4: तर्कमा विश्वास (Reasoning Confidence)", options=["Guessing", "Unsure", "Sure", "Very Sure"], key=f"t4_{idx}")
 
-            if st.button(f"Submit Assessment", key=f"btn_{idx}", use_container_width=True):
-                if not reason.strip() or len(reason.strip()) < 10:
-                    st.error("⚠️ कृपया थप विस्तृत वैज्ञानिक तर्क दिनुहोस्। (Provide more reasoning).")
-                else:
-                    success = log_assessment(
-                        st.session_state.user['User_ID'], 
-                        student_group, 
-                        row['Sub_Title'], 
-                        ans, conf1, reason, conf2, 
-                        "Complete", 
-                        get_nepal_time()
-                    )
-                    if success:
-                        # Store context for Saathi AI
-                        st.session_state.last_question_text = row['Diagnostic_Question']
-                        st.session_state.last_mcq_choice = ans
-                        st.session_state.last_tier3_reasoning = reason
-                        st.session_state.current_topic = row['Sub_Title']
-                        st.session_state.logic_tree = row['Socratic_Tree']
-                        st.session_state.last_submission_success = True
-                        log_temporal_trace(st.session_state.user['User_ID'], "QUIZ_SUBMIT", row['Sub_Title'])
-                        st.rerun()
+                if st.button("Submit First Thought", key=f"btn_{idx}"):
+                    log_assessment(st.session_state.user['User_ID'], student_group, row['Sub_Title'], ans, conf1, reason, conf2, "INITIAL", get_nepal_time())
+                    st.session_state.last_question_text = row['Diagnostic_Question']
+                    st.session_state.last_tier3_reasoning = reason
+                    st.success("Now, go to साथी (Saathi) AI to discuss your logic!")
+            else:
+                # --- REVISION MODE (TIERS 5 & 6) ---
+                st.info("🎯 **साथी AI सँगको छलफल पछि आफ्नो तर्क परिमार्जन गर्नुहोस्।** (Refine your reasoning after Saathi AI discussion.)")
+                st.write(f"**Original Question:** {row['Diagnostic_Question']}")
+                st.write(f"**Your Previous Reason:** {st.session_state.get('last_tier3_reasoning')}")
+                
+                rev_reason = st.text_area("Tier 5: परिमार्जित वैज्ञानिक तर्क (Revised Scientific Reasoning)", key=f"t5_{idx}")
+                rev_conf = st.select_slider("Tier 6: नयाँ आत्मविश्वास (New Confidence Level)", options=["Guessing", "Unsure", "Sure", "Very Sure"], key=f"t6_{idx}")
+
+                if st.button("Submit Final Mastery", key=f"rev_btn_{idx}"):
+                    log_assessment(st.session_state.user['User_ID'], student_group, row['Sub_Title'], "REVISED", "REVISED", rev_reason, rev_conf, "MASTERY", get_nepal_time())
+                    st.balloons()
+                    st.success("Mastery Logged! Check 'My Progress' to see your growth.")
+                    st.session_state[f"revizing_{row['Sub_Title']}"] = False
             st.divider()
-
     except Exception as e:
-        st.error(f"Error loading modules: {e}")
+        st.error(f"Error: {e}")
 
+# --- 2. SAATHI AI WITH MASTERY TAGGING ---
 def render_ai_chat(group_name):
-    st.markdown("<h2 style='color: #1E3A8A;'>🤖 साथी (Saathi) AI</h2>", unsafe_allow_html=True)
-    st.caption("तपाईंको विज्ञान साथी - Your Socratic Science Companion (Grades 8-10)")
-
-    # Retrieve context from the last assessment
-    last_q = st.session_state.get('last_question_text', 'a science concept')
-    last_ans = st.session_state.get('last_mcq_choice', 'None')
-    last_reason = st.session_state.get('last_tier3_reasoning', 'Not provided yet')
-
-    with st.expander("⚖️ रिसर्च र नैतिक खुलासा (Research & Ethical Disclosure)"):
-        st.write("Saathi AI helps you think, it doesn't just give answers. Your data is used for PhD research.")
-
-    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-
+    st.header("🤖 साथी (Saathi) AI")
+    last_reason = st.session_state.get('last_tier3_reasoning', '')
+    
     if "messages" not in st.session_state:
-        st.session_state.messages = []
-        # Context-Aware Priming
-        st.session_state.messages.append({
-            "role": "system", 
-            "content": f"Student answered: '{last_q}'. Selected: '{last_ans}'. Reason: '{last_reason}'."
-        })
+        st.session_state.messages = [{"role": "system", "content": f"Student reasoning to probe: {last_reason}. Focus on Grade 8-10 curriculum. Use Socratic questions."}]
 
-    for message in st.session_state.messages:
-        if message["role"] != "system":
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+    for m in st.session_state.messages:
+        if m["role"] != "system":
+            with st.chat_message(m["role"]): st.markdown(m["content"])
 
-    if prompt := st.chat_input("तपाईंको जिज्ञासा यहाँ लेख्नुहोस् (Write here)..."):
+    if prompt := st.chat_input("Ask Saathi AI..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+        with st.chat_message("user"): st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            system_prompt = f"""
-            You are 'Saathi AI' (साथी AI), a Socratic tutor for Grade 8-10 students in Nepal.
-            CONTEXT: Question: {last_q} | Choice: {last_ans} | Reasoning: {last_reason}
-            RULES:
-            1. NEVER give the answer.
-            2. Probe the student's reasoning ({last_reason}).
-            3. Use simple English and encouraging Nepali phrases like 'राम्रो प्रयास!'.
-            4. Keep responses under 3 sentences.
-            """
-            
+            client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
             response = client.chat.completions.create(
                 model="gpt-4o",
-                messages=[{"role": "system", "content": system_prompt}] + st.session_state.messages
+                messages=[{"role": "system", "content": "If student shows mastery, end with [MASTERY_REACHED]."}] + st.session_state.messages
             )
             ai_reply = response.choices[0].message.content
-            st.markdown(ai_reply)
             
-            log_temporal_trace(st.session_state.user['User_ID'], "AI_CHAT", f"AI: {ai_reply[:50]}")
+            # LOG BOTH SIDES
+            log_temporal_trace(st.session_state.user['User_ID'], "DIALOGUE", f"U: {prompt} | AI: {ai_reply}")
+            
+            if "[MASTERY_REACHED]" in ai_reply:
+                st.markdown(ai_reply.replace("[MASTERY_REACHED]", ""))
+                st.session_state[f"revizing_{st.session_state.get('current_topic')}"] = True
+                st.success("साथी AI believes you are ready to revise your answer! Go to 'Learning Modules'.")
+            else:
+                st.markdown(ai_reply)
             st.session_state.messages.append({"role": "assistant", "content": ai_reply})
 
-def render_progress(uid):
-    st.title("📈 My Learning Progress")
+# --- 3. THE METACOGNITIVE PROGRESS DASHBOARD ---
+def render_metacognitive_dashboard(uid):
+    st.title("📈 मेरो प्रगति (My Progress)")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
         user_data = df[df['User_ID'].astype(str) == str(uid)]
-        if not user_data.empty:
-            st.dataframe(user_data[['Timestamps', 'Module_ID', 'Tier_2 (Confidence_Ans)', 'Tier_4 (Confidence_Reas)']])
+
+        if user_data.empty:
+            st.info("No data yet.")
+            return
+
+        # Map confidence for visualization
+        c_map = {"Guessing": 1, "Unsure": 2, "Sure": 3, "Very Sure": 4}
+        user_data['conf_numeric'] = user_data['Tier_2 (Confidence_Ans)'].map(c_map)
+
+        # Plotly Calibration Chart
+        st.subheader("Your Confidence over Time")
+        fig = px.line(user_data, x="Timestamps", y="conf_numeric", markers=True, 
+                     title="Metacognitive Growth Line", labels={"conf_numeric": "Confidence Level"})
+        st.plotly_chart(fig)
+        
     except Exception as e:
         st.error(f"Error: {e}")
+
+def render_dashboard(user):
+    st.title(f"Namaste, {user['Name']}! 🙏")
+    st.write("Welcome to your Socratic Science journey.")
