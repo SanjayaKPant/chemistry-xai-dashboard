@@ -99,13 +99,12 @@ def render_modules(uid, group):
         st.error(f"Error loading modules: {e}")
 
 def render_ai_chat(uid, group):
-    # Retrieve from session state
     topic = st.session_state.get('current_topic')
     module_data = st.session_state.get('active_module_data')
 
-    # FIX: Use .empty check for Pandas Series to avoid the 'ambiguous' error
-    if topic is None or module_data is None or (isinstance(module_data, pd.Series) and module_data.empty):
-        st.warning("पहिले मोड्युलमा गएर उत्तर दिनुहोस्। (Please submit a module first.)")
+    # FIX 1: Safe check for None or Empty Series
+    if topic is None or module_data is None:
+        st.warning("पहिले मोड्युलमा गएर उत्तर दिनुहोस्। (Please start a module first.)")
         return
 
     # --- SIDE-BY-SIDE LAYOUT ---
@@ -113,30 +112,34 @@ def render_ai_chat(uid, group):
 
     with col_ref:
         st.subheader("📍 Reference Module")
+        # FIX 2: Using .get() to prevent KeyError if a column name is slightly different
+        q_text = module_data.get('Diagnostic_Question', 'Question not found')
         st.info(f"**Concept:** {topic}")
-        # Displaying the question and options for student reference
-        st.markdown(f"**Question:**\n{module_data['Diagnostic_Question']}")
-        st.write(f"A) {module_data['Option_A']}")
-        st.write(f"B) {module_data['Option_B']}")
-        st.write(f"C) {module_data['Option_C']}")
-        st.write(f"D) {module_data['Option_D']}")
+        st.markdown(f"**Question:**\n{q_text}")
         
-        if str(module_data.get('File_Link')) != "nan":
-            st.markdown(f"[📄 View Study Material]({module_data['File_Link']})")
+        # Display options only if they exist
+        for opt in ['Option_A', 'Option_B', 'Option_C', 'Option_D']:
+            val = module_data.get(opt, "")
+            if val: st.write(f"- {val}")
+        
+        # Safe link retrieval
+        file_link = module_data.get('File_Link')
+        if pd.notna(file_link) and str(file_link).startswith("http"):
+            st.markdown(f"[📄 View Study Material]({file_link})")
 
     with col_chat:
         st.subheader("🤖 साथी (Saathi) AI")
         
-        # Initialize message history
         if "messages" not in st.session_state:
+            # Socratic Prompt Engineering
+            logic = st.session_state.get('logic_tree', 'Guide the student using Socratic questioning.')
             st.session_state.messages = [{
                 "role": "system", 
-                "content": f"You are Saathi, a Socratic Chemistry Tutor. Help the student understand: {st.session_state.get('logic_tree')}. "
-                           f"Use Nepali or Roman Nepali. Do not give direct answers. "
-                           f"If they understand, include '[MASTERY_DETECTED]' in your reply."
+                "content": f"You are Saathi, a Socratic Chemistry Tutor. Logic Path: {logic}. "
+                           "Use Nepali/Roman Nepali. If they reach mastery, include '[MASTERY_DETECTED]'."
             }]
 
-        # Display chat history
+        # Display history
         for m in st.session_state.messages:
             if m["role"] != "system":
                 with st.chat_message(m["role"]):
@@ -144,40 +147,37 @@ def render_ai_chat(uid, group):
 
         # Chat Input
         if prompt := st.chat_input("साथी AI लाई सोध्नुहोस्..."):
-            # 1. Immediately show student message
+            # UI Fix: Immediate user message display
             with st.chat_message("user"):
                 st.markdown(prompt)
-            
-            # 2. Add to history
             st.session_state.messages.append({"role": "user", "content": prompt})
             
-            # 3. Get AI Response
             try:
                 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+                # FIX 3: Using gpt-4o or gpt-4o-mini consistently
                 response = client.chat.completions.create(
                     model="gpt-4o", 
                     messages=st.session_state.messages
                 )
                 ai_reply = response.choices[0].message.content
                 
-                # 4. Check for Mastery
                 if "[MASTERY_DETECTED]" in ai_reply:
                     st.session_state[f"mastery_{topic}"] = True
                     st.session_state.messages.append({"role": "assistant", "content": ai_reply})
-                    st.success("🎯 Mastery Detected! Returning to Module for Tiers 5 & 6.")
+                    st.balloons()
+                    st.success("🎯 Mastery Detected! Re-directing...")
                     st.session_state.current_tab = "📚 Learning Modules"
                     st.rerun()
 
-                # 5. Display AI message
                 with st.chat_message("assistant"):
                     st.markdown(ai_reply)
                 st.session_state.messages.append({"role": "assistant", "content": ai_reply})
                 
-                # Log the trace for research analysis
+                # Trace log for research
                 log_temporal_trace(uid, "AI_CHAT", f"Topic: {topic}")
 
             except Exception as e:
-                st.error(f"AI Connection Error: {e}")
+                st.error(f"AI Error: {e}")
 def render_metacognitive_dashboard(uid):
     st.title("📈 मेरो प्रगति")
     st.write("Confidence vs Accuracy trends will appear here.")
