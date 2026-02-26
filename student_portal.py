@@ -43,39 +43,90 @@ def render_modules(uid, group):
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         
-        # 1. FIX: Filter logs for the SPECIFIC student (uid) only
+        # 1. LOAD AND CLEAN LOGS (Fixed for cross-account bug)
         all_logs = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
         finished_modules = []
+        
         if not all_logs.empty:
-            # Crucial Filter: User_ID must match and Status must be 'POST'
+            # Force everything to string and strip spaces to ensure a perfect match
+            all_logs['User_ID'] = all_logs['User_ID'].astype(str).str.strip().str.upper()
+            all_logs['Status'] = all_logs['Status'].astype(str).str.strip().str.upper()
+            
             finished_modules = all_logs[
-                (all_logs['User_ID'].astype(str) == str(uid)) & 
+                (all_logs['User_ID'] == str(uid).strip().upper()) & 
                 (all_logs['Status'] == 'POST')
-            ]['Module_ID'].tolist()
+            ]['Module_ID'].unique().tolist()
 
-        # 2. Load Instructional Materials
+        # 2. LOAD MATERIALS
         df = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
-        available_modules = df[df['Group'] == group]
+        # Filter modules assigned to this student's specific research group
+        available_modules = df[df['Group'].astype(str).str.strip() == str(group).strip()]
 
-        # 3. Find the first module the student hasn't finished yet
-        active_module = next((row for _, row in available_modules.iterrows() if row['Sub_Title'] not in finished_modules), None)
+        # 3. FIND ACTIVE MODULE
+        active_module = next((row for _, row in available_modules.iterrows() 
+                             if str(row['Sub_Title']) not in finished_modules), None)
 
         if active_module is None:
-            st.success("🎉 उत्कृष्ट! तपाईंले सबै उपलब्ध मोड्युलहरू पूरा गर्नुभयो। (You completed all your modules!)")
+            st.success("🎉 उत्कृष्ट! तपाईंले सबै उपलब्ध मोड्युलहरू पूरा गर्नुभयो।")
             return
 
-        # 4. Display Module with Numbering (handled via Spreadsheet 'Module_No' column)
-        # If you add a column 'Module_No' in Sheets, use it here:
-        m_no = active_module.get('Module_No', '')
+        # 4. DISPLAY MODULE WITH NUMBERING
+        # Use the 'Module_No' column from your spreadsheet
+        m_no = active_module.get('Module_No', '?')
         m_id = active_module['Sub_Title']
         st.subheader(f"📖 Module {m_no}: {m_id}")
         
-        # ... [Rest of your Tier 1-4 radio buttons/input logic remains same] ...
-        # Ensure when "Submit" is clicked, it sets:
-        # st.session_state.active_module_data = active_module
+        # UI for tiers remains the same...
+        # Ensure st.session_state.active_module_data = active_module is set on submit
 
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Module Loading Error: {e}")
+
+def render_ai_chat(uid, group):
+    topic = st.session_state.get('current_topic')
+    module_data = st.session_state.get('active_module_data')
+
+    if topic is None or module_data is None:
+        st.warning("कृपया पहिले मोड्युल सुरु गर्नुहोस्।")
+        return
+
+    # Layout for context-aware chatting
+    col_ref, col_chat = st.columns([1, 2])
+    # [Your col_ref code here...]
+
+    with col_chat:
+        if "messages" not in st.session_state:
+            st.session_state.messages = [{"role": "system", "content": "Socratic Tutor Logic..."}]
+
+        for m in st.session_state.messages:
+            if m["role"] != "system":
+                with st.chat_message(m["role"]): st.markdown(m["content"])
+
+        if prompt := st.chat_input("साथी AI लाई सोध्नुहोस्..."):
+            with st.chat_message("user"): st.markdown(prompt)
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            
+            try:
+                client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+                response = client.chat.completions.create(model="gpt-4o", messages=st.session_state.messages)
+                ai_reply = response.choices[0].message.content
+                
+                # RECTIFICATION: Save ACTUAL chat details to Temporal Traces
+                # Format: "Student: [msg] | AI: [reply]"
+                full_interaction = f"Student: {prompt} || Saathi: {ai_reply}"
+                log_temporal_trace(str(uid), f"CHAT_SESSION_{topic}", full_interaction)
+
+                if "[MASTERY_DETECTED]" in ai_reply:
+                    st.session_state[f"mastery_{topic}"] = True
+                    st.session_state.messages.append({"role": "assistant", "content": ai_reply})
+                    st.session_state.current_tab = "📚 Learning Modules"
+                    st.rerun()
+
+                with st.chat_message("assistant"): st.markdown(ai_reply)
+                st.session_state.messages.append({"role": "assistant", "content": ai_reply})
+
+            except Exception as e:
+                st.error(f"AI Error: {e}")
 
 def render_ai_chat(uid, group):
     topic = st.session_state.get('current_topic')
