@@ -35,29 +35,12 @@ def check_login(user_id):
     except: return None
 
 # --- RESEARCH LOGGERS (12 COLUMNS) ---
-def log_assessment(user_id, group, module_id, t1, t2, t3, t4, status, ts, t5="N/A", t6="N/A", result="Pending", misc="N/A"):
+def log_assessment(user_id, group, module_id, t1, t2, t3, t4, status, ts, t5="N/A", t6="N/A", result="Pending"):
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         ws = sh.worksheet("Assessment_Logs")
-        
-        # This list MUST match your 12 headers exactly in order
-        row = [
-            ts,          # Timestamps
-            user_id,     # User_ID
-            group,       # Group
-            module_id,   # Module_ID
-            t1,          # Tier_1 (Answer)
-            t2,          # Tier_2 (Confidence_Ans)
-            t3,          # Tier_3 (Reason)
-            t4,          # Tier_4 (Confidence_Reas)
-            status,      # Status (INITIAL or POST)
-            t5,          # Tier_5_Revised_Reasoning
-            t6,          # Tier_6_Revised_Confidence
-            result,      # Diagnostic_Result
-            misc         # Misconception_Tag (if applicable)
-        ]
-        
+        row = [ts, user_id, group, module_id, t1, t2, t3, t4, status, t5, t6, result]
         ws.append_row(row)
         return True
     except Exception as e:
