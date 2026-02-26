@@ -34,17 +34,23 @@ def check_login(user_id):
         return match.iloc[0].to_dict() if not match.empty else None
     except: return None
 
-# --- RESEARCH LOGGERS (12 COLUMNS) ---
-def log_assessment(user_id, group, module_id, t1, t2, t3, t4, status, ts, t5="N/A", t6="N/A", result="Pending"):
+# --- RESEARCH LOGGERS (STRICT 13 COLUMNS) ---
+def log_assessment(user_id, group, module_id, t1, t2, t3, t4, status, ts, t5="N/A", t6="N/A", result="Pending", misc="N/A"):
+    """Corrected to handle exactly 13 arguments for PhD Data Integrity"""
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         ws = sh.worksheet("Assessment_Logs")
-        row = [ts, user_id, group, module_id, t1, t2, t3, t4, status, t5, t6, result]
+        
+        row = [
+            ts, user_id, group, module_id, 
+            t1, t2, t3, t4, 
+            status, t5, t6, result, misc
+        ]
         ws.append_row(row)
         return True
     except Exception as e:
-        print(f"Logging Error: {e}")
+        st.error(f"Logging Error: {e}")
         return False
 
 def log_temporal_trace(user_id, event_type, details):
@@ -56,7 +62,7 @@ def log_temporal_trace(user_id, event_type, details):
         return True
     except: return False
 
-# --- TEACHER & FILE TOOLS ---
+# --- TEACHER TOOLS ---
 def upload_to_drive(uploaded_file):
     try:
         creds = get_creds()
