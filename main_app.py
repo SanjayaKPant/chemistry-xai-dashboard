@@ -4,7 +4,6 @@ import database_manager as db
 # Page Config must be the first command
 st.set_page_config(page_title="Chemistry PhD Research Portal", layout="wide")
 
-# Import the portal modules
 import student_portal
 import teacher_portal
 import researcher_portal
@@ -18,7 +17,7 @@ if st.session_state.user is None:
     
     col1, _ = st.columns([1, 1])
     with col1:
-        user_id = st.text_input("Enter Researcher/User ID").strip().upper()
+        user_id = st.text_input("Enter ID (e.g., R101, S101)").strip().upper()
     
     if st.button("Login"):
         user_data = db.check_login(user_id)
@@ -30,18 +29,15 @@ if st.session_state.user is None:
 else:
     # Sidebar logout and info
     st.sidebar.title(f"👤 {st.session_state.user.get('Name')}")
-    st.sidebar.write(f"**Role:** {st.session_state.user.get('Role')}")
+    role = str(st.session_state.user.get('Role', 'Student')).strip()
+    st.sidebar.write(f"**Role:** {role}")
     
     if st.sidebar.button("Log Out"):
-        st.session_state.user = None
         st.session_state.clear()
         st.rerun()
 
-    # --- PhD ROUTING LOGIC ---
-    # We force a strict check to prevent role-bleeding
-    role = str(st.session_state.user.get('Role', 'Student')).strip()
-
-    if role == "Researcher" or role == "Supervisor":
+    # --- STRICT PhD ROUTING LOGIC ---
+    if role in ["Researcher", "Supervisor", "Admin"]:
         researcher_portal.show()
     elif role == "Teacher":
         teacher_portal.show()
