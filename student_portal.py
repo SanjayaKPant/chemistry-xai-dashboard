@@ -99,51 +99,85 @@ def render_modules(uid, group):
         st.error(f"Error loading modules: {e}")
 
 def render_ai_chat(uid, group):
+    # Retrieve from session state
     topic = st.session_state.get('current_topic')
     module_data = st.session_state.get('active_module_data')
 
-    if not topic or not module_data:
-        st.warning("पहिले मोड्युलमा गएर उत्तर दिनुहोस्।")
+    # FIX: Use .empty check for Pandas Series to avoid the 'ambiguous' error
+    if topic is None or module_data is None or (isinstance(module_data, pd.Series) and module_data.empty):
+        st.warning("पहिले मोड्युलमा गएर उत्तर दिनुहोस्। (Please submit a module first.)")
         return
 
-    # --- NEW SIDE-BY-SIDE LAYOUT ---
+    # --- SIDE-BY-SIDE LAYOUT ---
     col_ref, col_chat = st.columns([1, 2])
 
     with col_ref:
         st.subheader("📍 Reference Module")
-        st.markdown(f"**Concept:** {topic}")
-        st.info(f"**Question:** {module_data['Diagnostic_Question']}")
-        st.write(f"A) {module_data['Option_A']}\n\nB) {module_data['Option_B']}\n\nC) {module_data['Option_C']}\n\nD) {module_data['Option_D']}")
-        if module_data.get('File_Link'):
-            st.markdown(f"[📄 Study Material]({module_data['File_Link']})")
+        st.info(f"**Concept:** {topic}")
+        # Displaying the question and options for student reference
+        st.markdown(f"**Question:**\n{module_data['Diagnostic_Question']}")
+        st.write(f"A) {module_data['Option_A']}")
+        st.write(f"B) {module_data['Option_B']}")
+        st.write(f"C) {module_data['Option_C']}")
+        st.write(f"D) {module_data['Option_D']}")
+        
+        if str(module_data.get('File_Link')) != "nan":
+            st.markdown(f"[📄 View Study Material]({module_data['File_Link']})")
 
     with col_chat:
         st.subheader("🤖 साथी (Saathi) AI")
+        
+        # Initialize message history
         if "messages" not in st.session_state:
-            st.session_state.messages = [{"role": "system", "content": f"Socratic Tutor. Goal: {st.session_state.get('logic_tree')}. Use Nepali/Roman Nepali."}]
+            st.session_state.messages = [{
+                "role": "system", 
+                "content": f"You are Saathi, a Socratic Chemistry Tutor. Help the student understand: {st.session_state.get('logic_tree')}. "
+                           f"Use Nepali or Roman Nepali. Do not give direct answers. "
+                           f"If they understand, include '[MASTERY_DETECTED]' in your reply."
+            }]
 
+        # Display chat history
         for m in st.session_state.messages:
             if m["role"] != "system":
-                with st.chat_message(m["role"]): st.markdown(m["content"])
+                with st.chat_message(m["role"]):
+                    st.markdown(m["content"])
 
-        if prompt := st.chat_input("Ask Saathi AI..."):
-            # FIX: Display student prompt immediately
-            with st.chat_message("user"): st.markdown(prompt)
+        # Chat Input
+        if prompt := st.chat_input("साथी AI लाई सोध्नुहोस्..."):
+            # 1. Immediately show student message
+            with st.chat_message("user"):
+                st.markdown(prompt)
+            
+            # 2. Add to history
             st.session_state.messages.append({"role": "user", "content": prompt})
             
-            client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-            response = client.chat.completions.create(model="gpt-4o", messages=st.session_state.messages)
-            ai_reply = response.choices[0].message.content
-            
-            if "[MASTERY_DETECTED]" in ai_reply:
-                st.session_state[f"mastery_{topic}"] = True
-                st.session_state.current_tab = "📚 Learning Modules"
-                st.session_state.messages.append({"role": "assistant", "content": ai_reply})
-                st.rerun()
-            
-            with st.chat_message("assistant"): st.markdown(ai_reply)
-            st.session_state.messages.append({"role": "assistant", "content": ai_reply})
+            # 3. Get AI Response
+            try:
+                client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+                response = client.chat.completions.create(
+                    model="gpt-4o", 
+                    messages=st.session_state.messages
+                )
+                ai_reply = response.choices[0].message.content
+                
+                # 4. Check for Mastery
+                if "[MASTERY_DETECTED]" in ai_reply:
+                    st.session_state[f"mastery_{topic}"] = True
+                    st.session_state.messages.append({"role": "assistant", "content": ai_reply})
+                    st.success("🎯 Mastery Detected! Returning to Module for Tiers 5 & 6.")
+                    st.session_state.current_tab = "📚 Learning Modules"
+                    st.rerun()
 
+                # 5. Display AI message
+                with st.chat_message("assistant"):
+                    st.markdown(ai_reply)
+                st.session_state.messages.append({"role": "assistant", "content": ai_reply})
+                
+                # Log the trace for research analysis
+                log_temporal_trace(uid, "AI_CHAT", f"Topic: {topic}")
+
+            except Exception as e:
+                st.error(f"AI Connection Error: {e}")
 def render_metacognitive_dashboard(uid):
     st.title("📈 मेरो प्रगति")
     st.write("Confidence vs Accuracy trends will appear here.")
