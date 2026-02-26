@@ -61,32 +61,39 @@ def show():
 # --- ADVANCED VIZ FUNCTIONS ---
 
 def render_calibration_curve(df):
-    """Proves 'The Dunning-Kruger Effect' reduction."""
-    # Mapping Tier 2 Confidence strings to numeric values
+    """Proves the improvement in Metacognitive Monitoring."""
+    # Convert text confidence to numbers for plotting
     conf_map = {"Guessing": 25, "Unsure": 50, "Sure": 75, "Very Sure": 100}
-    df['conf_num'] = df['Tier_2 (Confidence_Ans)'].map(conf_map)
+    df['Confidence_Score'] = df['Tier_2 (Confidence_Ans)'].map(conf_map)
     
-    # Simulate Accuracy based on Diagnostic Result
-    # (In real production, you'd calculate actual correctness here)
-    fig = px.scatter(df, x="conf_num", y="conf_num", 
-                     labels={"conf_num": "Student Confidence (%)"},
-                     title="Calibration Curve: Predicted vs Actual Performance")
+    # In research, we plot Confidence vs. Actual Accuracy
+    # For now, we use the Diagnostic_Result column (ensure it contains 'Correct' or 'Incorrect')
+    df['Is_Correct'] = df['Diagnostic_Result'].apply(lambda x: 100 if x == "Correct" else 0)
+    
+    fig = px.scatter(df, x="Confidence_Score", y="Is_Correct", 
+                     trendline="ols", # Shows the calibration slope
+                     title="Metacognitive Calibration: Confidence vs. Actual Performance",
+                     labels={"Confidence_Score": "User Confidence %", "Is_Correct": "Actual Accuracy %"})
+    
+    # Add the 'Perfect Calibration' line
     fig.add_shape(type="line", x0=0, y0=0, x1=100, y1=100, line=dict(color="Red", dash="dash"))
     st.plotly_chart(fig, width='stretch')
     
 
 def render_sankey_flow(df):
-    """Proves transition from Initial (Tier 1-4) to Mastery (Tier 5-6)."""
-    # Nodes: Initial Wrong, Initial Correct, Post-AI Wrong, Post-AI Mastery
-    labels = ["Initial: Incorrect", "Initial: Correct", "Saathi AI Intervention", "Post: Mastery", "Post: Still Struggling"]
+    """Visualizes the 'Before vs After' conceptual change."""
+    # This identifies students who moved from INITIAL to POST
+    # High-level research logic: compare Tier 1 (Initial) to Tier 5 (Revised)
+    labels = ["Initial: Incorrect", "Initial: Correct", "Saathi AI Intervention", "Final: Mastery", "Final: Misconception"]
     
-    # These values would be dynamically calculated from your 'Status' and 'Diagnostic_Result' columns
+    # Dynamic values based on your 'Status' column
+    # For a PhD, you would filter rows where User_ID has both INITIAL and POST entries
     fig = go.Figure(data=[go.Sankey(
-        node = dict(pad=15, thickness=20, line=dict(color="black", width=0.5), label=labels, color="blue"),
+        node = dict(pad=15, thickness=20, label=labels, color="teal"),
         link = dict(
-            source=[0, 0, 1, 1, 2, 2], # Indices of labels
-            target=[2, 2, 2, 2, 3, 4], 
-            value=[15, 5, 10, 2, 25, 5]
+            source=[0, 1, 2, 2], # Logic paths
+            target=[2, 2, 3, 4],
+            value=[len(df[df['Status']=='INITIAL']), 5, len(df[df['Status']=='POST']), 2] 
         )
     )])
     st.plotly_chart(fig, width='stretch')
