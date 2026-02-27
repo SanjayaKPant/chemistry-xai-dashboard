@@ -23,7 +23,7 @@ def get_gspread_client():
     creds = get_creds()
     return gspread.authorize(creds) if creds else None
 
-# --- LOGIN (ROBUST) ---
+# --- CORE LOGIN ---
 def check_login(user_id):
     try:
         client = get_gspread_client()
@@ -36,14 +36,14 @@ def check_login(user_id):
     except:
         return None
 
-# --- TEACHER TOOLS (UNTOUCHED) ---
+# --- TEACHER & FILE UTILITIES (KEEPING OLD CODES) ---
 def upload_to_drive(uploaded_file):
     try:
         creds = get_creds()
         service = build('drive', 'v3', credentials=creds)
         file_metadata = {'name': uploaded_file.name, 'parents': ['1pA_yM0eW89P2nBPrK_SPrvA5m_p5zKq_']} 
         media = MediaIoBaseUpload(io.BytesIO(uploaded_file.getvalue()), mimetype=uploaded_file.type)
-        file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
+        file = service.files().create(body=media_body=media, body=file_metadata, fields='id, webViewLink').execute()
         return file.get('webViewLink')
     except: return None
 
@@ -59,26 +59,31 @@ def save_bulk_concepts(teacher_id, group, main_title, data):
         return True
     except: return False
 
-# --- RESEARCH LOGGING (TIER 1-6) ---
+def save_assignment(teacher_id, group, title, desc, file_url):
+    try:
+        client = get_gspread_client()
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        ws = sh.worksheet("Assignments")
+        ws.append_row([datetime.now().strftime("%Y-%m-%d"), teacher_id, group, title, desc, file_url])
+        return True
+    except: return False
+
+# --- PhD RESEARCH LOGGING (TIERS 1-6) ---
 def log_assessment(uid, group, module_id, t1, t2, t3, t4, status, timestamp, t5="N/A", t6="N/A"):
-    """
-    PhD LOGGING: Captures the full journey of conceptual change.
-    T1-T4: Initial Assessment | T5-T6: Post-Socratic Revision.
-    """
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         ws = sh.worksheet("Assessment_Logs")
         
-        # Determine correctness based on the state
+        # Determine Correctness for research analysis
         m_ws = sh.worksheet("Instructional_Materials")
         m_df = pd.DataFrame(m_ws.get_all_records())
         correct_ans = m_df[m_df['Sub_Title'] == module_id]['Correct_Answer'].values[0]
         
-        check_val = t5 if status == "POST" else t1
-        result = "Correct" if str(check_val).strip() == str(correct_ans).strip() else "Incorrect"
+        val_to_check = t5 if status == "POST" else t1
+        result = "Correct" if str(val_to_check).strip() == str(correct_ans).strip() else "Incorrect"
 
-        # Log structure: [Time, ID, Group, Mod, T1, T2, T3, T4, Status, Result, T5, T6]
+        # Log structure includes T5 and T6
         row = [timestamp, str(uid).upper(), group, module_id, t1, t2, t3, t4, status, result, t5, t6]
         ws.append_row(row)
         return True
@@ -91,3 +96,25 @@ def log_temporal_trace(uid, event, details):
         ws = sh.worksheet("Temporal_Traces")
         ws.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), str(uid).upper(), event, details])
     except: pass
+
+def fetch_chat_history(uid, module_id):
+    """Retrieves previous chat for persistence."""
+    try:
+        client = get_gspread_client()
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        df = pd.DataFrame(sh.worksheet("Temporal_Traces").get_all_records())
+        if df.empty: return []
+        
+        # Filter traces for this user and module that were CHAT_MSG
+        mask = (df['User_ID'].astype(str).str.upper() == uid.upper()) & \
+               (df['Event'] == "CHAT_MSG") & \
+               (df['Details'].str.contains(module_id))
+        filtered = df[mask]
+        
+        history = []
+        for _, row in filtered.iterrows():
+            # Basic parsing of the details string
+            content = row['Details'].split("| Content: ")[-1] if "| Content: " in row['Details'] else row['Details']
+            history.append({"role": "user", "content": content})
+        return history
+    except: return []
