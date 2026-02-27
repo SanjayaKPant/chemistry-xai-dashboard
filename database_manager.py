@@ -23,47 +23,22 @@ def get_gspread_client():
     creds = get_creds()
     return gspread.authorize(creds) if creds else None
 
-# --- CORE LOGIN ---
+# --- CORE LOGIN (STRIP/UPPER FIX) ---
 def check_login(user_id):
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         df = pd.DataFrame(sh.worksheet("Participants").get_all_records())
         df['User_ID'] = df['User_ID'].astype(str).str.upper().str.strip()
-        match = df[df['User_ID'] == str(user_id).upper().strip()]
+        user_id = str(user_id).upper().strip()
+        match = df[df['User_ID'] == user_id]
         return match.iloc[0].to_dict() if not match.empty else None
-    except: return None
+    except:
+        return None
 
-# --- RESEARCH LOGGERS (STRICT 13 COLUMNS) ---
-def log_assessment(user_id, group, module_id, t1, t2, t3, t4, status, ts, t5="N/A", t6="N/A", result="Pending", misc="N/A"):
-    """Corrected to handle exactly 13 arguments for PhD Data Integrity"""
-    try:
-        client = get_gspread_client()
-        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        ws = sh.worksheet("Assessment_Logs")
-        
-        row = [
-            ts, user_id, group, module_id, 
-            t1, t2, t3, t4, 
-            status, t5, t6, result, misc
-        ]
-        ws.append_row(row)
-        return True
-    except Exception as e:
-        st.error(f"Logging Error: {e}")
-        return False
-
-def log_temporal_trace(user_id, event_type, details):
-    try:
-        client = get_gspread_client()
-        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        ws = sh.worksheet("Temporal_Traces")
-        ws.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user_id, event_type, details])
-        return True
-    except: return False
-
-# --- TEACHER TOOLS ---
+# --- TEACHER & ADMIN TOOLS (RE-INTEGRATED) ---
 def upload_to_drive(uploaded_file):
+    """Retained from your original code for Teacher assignments."""
     try:
         creds = get_creds()
         service = build('drive', 'v3', credentials=creds)
@@ -74,6 +49,7 @@ def upload_to_drive(uploaded_file):
     except: return None
 
 def save_bulk_concepts(teacher_id, group, main_title, data):
+    """Retained for Module deployment."""
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
@@ -86,10 +62,37 @@ def save_bulk_concepts(teacher_id, group, main_title, data):
     except: return False
 
 def save_assignment(teacher_id, group, title, desc, file_url):
+    """Retained for homework functionality."""
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         ws = sh.worksheet("Assignments")
-        ws.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), teacher_id, group, title, desc, file_url])
+        ws.append_row([datetime.now().strftime("%Y-%m-%d"), teacher_id, group, title, desc, file_url])
         return True
     except: return False
+
+# --- STUDENT RESEARCH LOGGING (ENHANCED) ---
+def log_assessment(uid, group, module_id, t1, t2, t3, t4, status, timestamp):
+    try:
+        client = get_gspread_client()
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        ws = sh.worksheet("Assessment_Logs")
+        
+        # Determine correctness for the 'Diagnostic_Result' column
+        m_ws = sh.worksheet("Instructional_Materials")
+        m_df = pd.DataFrame(m_ws.get_all_records())
+        correct_ans = m_df[m_df['Sub_Title'] == module_id]['Correct_Answer'].values[0]
+        result = "Correct" if str(t1).strip() == str(correct_ans).strip() else "Incorrect"
+
+        row = [timestamp, str(uid).upper(), group, module_id, t1, t2, t3, t4, status, result]
+        ws.append_row(row)
+        return True
+    except: return False
+
+def log_temporal_trace(uid, event, details):
+    try:
+        client = get_gspread_client()
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        ws = sh.worksheet("Temporal_Traces")
+        ws.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), str(uid).upper(), event, details])
+    except: pass
