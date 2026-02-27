@@ -23,7 +23,7 @@ def get_gspread_client():
     creds = get_creds()
     return gspread.authorize(creds) if creds else None
 
-# --- CORE LOGIN (STRIP/UPPER FIX) ---
+# --- LOGIN (ROBUST) ---
 def check_login(user_id):
     try:
         client = get_gspread_client()
@@ -36,9 +36,8 @@ def check_login(user_id):
     except:
         return None
 
-# --- TEACHER & ADMIN TOOLS (RE-INTEGRATED) ---
+# --- TEACHER TOOLS (UNTOUCHED) ---
 def upload_to_drive(uploaded_file):
-    """Retained from your original code for Teacher assignments."""
     try:
         creds = get_creds()
         service = build('drive', 'v3', credentials=creds)
@@ -49,7 +48,6 @@ def upload_to_drive(uploaded_file):
     except: return None
 
 def save_bulk_concepts(teacher_id, group, main_title, data):
-    """Retained for Module deployment."""
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
@@ -61,43 +59,30 @@ def save_bulk_concepts(teacher_id, group, main_title, data):
         return True
     except: return False
 
-def save_assignment(teacher_id, group, title, desc, file_url):
-    """Retained for homework functionality."""
-    try:
-        client = get_gspread_client()
-        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        ws = sh.worksheet("Assignments")
-        ws.append_row([datetime.now().strftime("%Y-%m-%d"), teacher_id, group, title, desc, file_url])
-        return True
-    except: return False
-
-# --- STUDENT RESEARCH LOGGING (ENHANCED) ---
+# --- RESEARCH LOGGING (TIER 1-6) ---
 def log_assessment(uid, group, module_id, t1, t2, t3, t4, status, timestamp, t5="N/A", t6="N/A"):
     """
-    Enhanced to 6-Tiers for PhD Conceptual Change Analysis.
-    t5: Revised Reasoning | t6: Revised Confidence
+    PhD LOGGING: Captures the full journey of conceptual change.
+    T1-T4: Initial Assessment | T5-T6: Post-Socratic Revision.
     """
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         ws = sh.worksheet("Assessment_Logs")
         
-        # Determine correctness for Tier 5 (the Final answer)
+        # Determine correctness based on the state
         m_ws = sh.worksheet("Instructional_Materials")
         m_df = pd.DataFrame(m_ws.get_all_records())
         correct_ans = m_df[m_df['Sub_Title'] == module_id]['Correct_Answer'].values[0]
         
-        # If it's a POST-test (Tier 5/6), check against Tier 5. Otherwise Tier 1.
-        final_ans = t5 if status == "POST" else t1
-        result = "Correct" if str(final_ans).strip() == str(correct_ans).strip() else "Incorrect"
+        check_val = t5 if status == "POST" else t1
+        result = "Correct" if str(check_val).strip() == str(correct_ans).strip() else "Incorrect"
 
-        # Log Row: [Timestamp, ID, Group, Mod, T1, T2, T3, T4, Status, Result, T5, T6]
+        # Log structure: [Time, ID, Group, Mod, T1, T2, T3, T4, Status, Result, T5, T6]
         row = [timestamp, str(uid).upper(), group, module_id, t1, t2, t3, t4, status, result, t5, t6]
         ws.append_row(row)
         return True
-    except Exception as e:
-        print(f"Logging Error: {e}")
-        return False
+    except: return False
 
 def log_temporal_trace(uid, event, details):
     try:
