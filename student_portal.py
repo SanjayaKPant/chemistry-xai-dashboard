@@ -92,89 +92,69 @@ def render_modules(uid, group):
                 t3 = st.text_area("Provide Reasoning / कारण दिनुहोस् (Tier 3):")
                 t4 = st.select_slider("Reasoning Confidence:", ["Guessing", "Unsure", "Sure", "Very Sure"])
                 
-                if st.form_submit_button("Submit & Discuss with AI"):
+                if st.form_submit_button("Submit & Discuss with Saathi AI"):
+                    st.session_state.current_module = active
                     log_assessment(uid, group, active['Sub_Title'], t1, t2, t3, t4, "INITIAL", get_nepal_time().strftime("%Y-%m-%d %H:%M"))
-                    st.session_state.active_module = active
-                    st.success("Logged! Please switch to Saathi AI tab.")
+                    st.switch_page("student_portal.py") # Or manual tab switch
+                   
     else:
         st.balloons()
         st.success("All assigned modules complete! / सबै मोड्युलहरू पूरा भए!")
 
-# --- PROGRESS VIEW (Restored & Aesthetic) ---
-def render_progress(uid):
-    st.header("📈 My Progress / मेरो प्रगति")
-    try:
-        client = get_gspread_client()
-        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
-        df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
-        user_df = df[df['User_ID'].astype(str).str.upper() == uid]
-
-        if user_df.empty:
-            st.warning("No data yet. Start a module to see progress cards.")
-            return
-
-        c1, c2, c3 = st.columns(3)
-        m_started = len(user_df[user_df['Status'] == 'INITIAL'])
-        m_done = len(user_df[user_df['Status'] == 'POST'])
-        c1.metric("Started", m_started)
-        c2.metric("Mastered", m_done)
-        c3.metric("Growth Rate", f"{(m_done/m_started*100 if m_started>0 else 0):.0f}%")
-
-        st.subheader("Confidence Growth Curve")
-        # Visualizing metacognition as requested for PhD analysis
-        fig = px.area(user_df, x="Timestamp", y="Tier_2 (Confidence_Ans)", 
-                      title="Confidence Trend / आत्मविश्वास प्रवृत्ति", 
-                      labels={"Tier_2 (Confidence_Ans)": "Confidence Level"})
-        st.plotly_chart(fig, use_container_width=True)
-    except Exception as e:
-        st.error(f"Progress data error: {e}")
-
-# --- SAATHI AI VIEW (Socratic Value) ---
+# AI chat with Tier 5 and Tier 6
 def render_ai_chat(uid, group):
-    module = st.session_state.get('active_module')
+    module = st.session_state.get('current_module')
     if not module:
-        st.warning("Please submit an initial answer in 'Learning Modules' first.")
+        st.warning("Please select a module first.")
         return
 
-    st.subheader(f"🤖 Socratic Dialogue: {module['Sub_Title']}")
+    st.subheader(f"🤖 Discussing: {module['Sub_Title']}")
     
-    if st.session_state.get('mastery_detected'):
-        render_final_t5_t6(uid, group, module)
+    # Detecting Learning Mastery
+    if st.session_state.get('mastery_triggered'):
+        render_tier_5_6_form(uid, group, module)
         return
 
+    # Chat logic (GPT-4o)
     if "messages" not in st.session_state:
-        st.session_state.messages = [{"role": "system", "content": SOCRATIC_NORMS}]
+        st.session_state.messages = [{"role": "system", "content": f"Socratic Tutor. Topic: {module['Sub_Title']}. Guide via questioning."}]
 
-    for m in st.session_state.messages[1:]:
-        with st.chat_message(m["role"]): st.markdown(m["content"])
+    for msg in st.session_state.messages[1:]:
+        with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Explain your logic to Saathi..."):
+    if prompt := st.chat_input("Chat with Saathi..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        log_temporal_trace(uid, "CHAT_MSG", f"Mod: {module['Sub_Title']} | {prompt}")
-        
         client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-        resp = client.chat.completions.create(model="gpt-4o", messages=st.session_state.messages)
-        reply = resp.choices[0].message.content
+        response = client.chat.completions.create(model="gpt-4o", messages=st.session_state.messages)
+        ai_msg = response.choices[0].message.content
         
-        if "[MASTERY_DETECTED]" in reply:
-            st.session_state.mastery_detected = True
+        # Persistance: Save trace to DB immediately
+        log_temporal_trace(uid, "CHAT_LOG", f"Topic: {module['Sub_Title']} | Msg: {prompt}")
+
+        if "[MASTERY_DETECTED]" in ai_msg:
+            st.session_state.mastery_triggered = True
             st.rerun()
-            
-        st.session_state.messages.append({"role": "assistant", "content": reply})
+
+        st.session_state.messages.append({"role": "assistant", "content": ai_msg})
         st.rerun()
 
-def render_final_t5_t6(uid, group, module):
-    st.success("🌟 Mastery Detected! Final Step / अन्तिम चरण")
+def render_tier_5_6_form(uid, group, module):
+    st.success("🌟 Great! I think You developed right concept./ मलाई लाग्छ तपाईंले सही अवधारणा विकास गर्नुभयो। Final Step:")
+    st.info("Based on your discussion, would you like to keep or change your original answer? / साथी एआईसँगको छलफलको आधारमा, के तपाईं आफ्नो अघिल्लो उत्तर राख्न वा परिमार्जन गर्न चाहनुहुन्छ?
+")
     
-    with st.form("t56_final"):
-        st.markdown("### Post-Discussion Assessment (Tier 5 & 6)")
-        opts = [module['Option_A'], module['Option_B'], module['Option_C'], module['Option_D']]
-        t5 = st.radio("Revised Choice:", opts)
-        t6 = st.select_slider("Revised Confidence:", ["Guessing", "Unsure", "Sure", "Very Sure"])
+    with st.form("tier5_6"):
+        t5 = st.radio("Final Answer (Tier 5):", [module['Option_A'], module['Option_B'], module['Option_C'], module['Option_D']])
+        t6 = st.select_slider("Final Confidence (Tier 6):", ["Guessing", "Unsure", "Sure", "Very Sure"])
         
-        if st.form_submit_button("Complete Module"):
-            log_assessment(uid, group, module['Sub_Title'], "N/A", "N/A", "Mastered", "N/A", "POST", 
+        if st.form_submit_button("Confirm Mastery & Save"):
+            # LOG FINAL POST-TEST DATA
+            log_assessment(uid, group, module['Sub_Title'], "N/A", "N/A", "Mastered via Chat", "N/A", "POST", 
                            get_nepal_time().strftime("%Y-%m-%d %H:%M"), t5, t6)
-            del st.session_state.active_module
-            st.session_state.mastery_detected = False
+            
+            # Reset for next module
+            del st.session_state.current_module
+            del st.session_state.messages
+            st.session_state.mastery_triggered = False
+            st.success("Data saved. Moving to next concept.")
             st.rerun()
