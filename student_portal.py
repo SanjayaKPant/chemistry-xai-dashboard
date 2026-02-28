@@ -68,7 +68,7 @@ def render_dashboard(user):
         st.info("🎯 **Our Plan:** 1) Consult Saathi AI for clear science concepts. 2) To complete diagnostic module for clear conceptual understandings.")
         st.info("🎯 **Our Appraoch:** 1) 24/7. 2) Personalized learning.")
 
-# --- MODULES VIEW (Tiers 1-4) ---
+# Modules(Tiers 1-4)
 def render_modules(uid, group):
     st.header("📚 Learning Modules")
     client = get_gspread_client()
