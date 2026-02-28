@@ -63,9 +63,7 @@ def render_dashboard(user):
         st.metric("📅 Date", now.strftime("%b %d, %Y"))
     with col3:
         # 3D Image
-        st.image("https://upload.wikimedia.org/wikipedia/commons/e/e1/Stylised_Lithium_Atom.png", 
-                 caption="Chemistry Research Portal", use_container_width=True)
-
+        
         st.info("🎯**Our Goal:** 1) To enhance the understding of core concepts of science. 2) To enhance students' performance and engagement. 3) To increase learning outcomes.")
         st.info("🎯 **Our Plan:** 1) Consult Saathi AI for clear science concepts. 2) To complete diagnostic module for clear conceptual understandings.")
         st.info("🎯 **Our Appraoch:** 1) 24/7. 2) Personalized learning.")
