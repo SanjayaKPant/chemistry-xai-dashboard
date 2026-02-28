@@ -5,10 +5,10 @@ from openai import OpenAI
 from database_manager import get_gspread_client, log_assessment, log_temporal_trace
 from datetime import datetime, timedelta
 
-# --- RESEARCH CONSTANTS & NORMS ---
+# Our research norms
 SOCRATIC_NORMS = """
 You are Saathi AI, a Socratic Chemistry Tutor.
-1. NEVER give the student the answer.
+1. NEVER give the student any sort of direct answer.
 2. Ask one probing question at a time to uncover their mental model.
 3. If they are wrong, point out a contradiction in their logic.
 4. When they truly understand and explain correctly, output [MASTERY_DETECTED].
@@ -34,13 +34,13 @@ def show():
     user = st.session_state.user
     uid, group = str(user.get('User_ID', '')).upper(), str(user.get('Group', 'Control'))
 
-    # SIDEBAR - Bilingual
+    # Bilingual Sidebar
     st.sidebar.markdown(f"### 🎓 {user.get('Name')}")
     menu = {
-        "🏠 Dashboard": "🏠 ड्यासबोर्ड",
-        "📚 Learning Modules": "📚 सिकाई मोड्युलहरू",
-        "🤖 Saathi AI": "🤖 साथी AI",
-        "📈 My Progress": "📈 मेरो प्रगति"
+        "🏠 Dashboard": "ड्यासबोर्ड",
+        "📚 Learning Modules": "सिकाई मोड्युलहरू",
+        "🤖 Saathi AI": "साथी AI",
+        "📈 My Progress": "मेरो प्रगति"
     }
     choice = st.sidebar.radio("Navigation / नेभिगेसन", list(menu.keys()), 
                               format_func=lambda x: f"{x} ({menu[x]})")
@@ -50,11 +50,11 @@ def show():
     elif choice == "🤖 Saathi AI": render_ai_chat(uid, group)
     elif choice == "📈 My Progress": render_progress(uid)
 
-# --- DASHBOARD VIEW ---
+# Dashboard Design
 def render_dashboard(user):
     now = get_nepal_time()
     st.title(f"Namaste, {user.get('Name')}! 🙏")
-    st.markdown("<p class='bilingual-hint'>Welcome to your research portal / तपाईंको अनुसन्धान पोर्टलमा स्वागत छ</p>", unsafe_allow_html=True)
+    st.markdown("<p class='bilingual-hint'>Welcome to science learning portal / विज्ञान सिकाइ पोर्टलमा तपाईंलाई स्वागत छ।</p>", unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns([1, 1, 1])
     with col1:
@@ -62,10 +62,12 @@ def render_dashboard(user):
     with col2:
         st.metric("📅 English Date", now.strftime("%b %d, %Y"))
     with col3:
-        # 3D Visual context for competitive feel
-        st.image("https://upload.wikimedia.org/wikipedia/commons/e/e1/Stylised_Lithium_Atom.png", width=120)
+        # 3D Image
+        st.image("https://upload.wikimedia.org/wikipedia/commons/e/e1/Stylised_Lithium_Atom.png", 
+                 caption="Chemistry Research Portal", use_container_width=True)
 
-    st.info("🎯 **Target:** Complete your diagnostic module and consult Saathi AI for conceptual clarity.")
+    st.info("🎯 **Our Plan:** To complete diagnostic module and consult Saathi AI for conceptual clarity.")
+    st.info("🎯**Our Goal:** To enhance the understding of core concepts of science.")
 
 # --- MODULES VIEW (Tiers 1-4) ---
 def render_modules(uid, group):
