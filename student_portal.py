@@ -58,16 +58,17 @@ def render_dashboard(user):
 
     col1, col2, col3 = st.columns([1, 1, 1])
     with col1:
-        st.metric("🕒 Nepal Time", now.strftime("%I:%M %p"))
+        st.metric("🕒 Time", now.strftime("%I:%M %p"))
     with col2:
-        st.metric("📅 English Date", now.strftime("%b %d, %Y"))
+        st.metric("📅 Date", now.strftime("%b %d, %Y"))
     with col3:
         # 3D Image
         st.image("https://upload.wikimedia.org/wikipedia/commons/e/e1/Stylised_Lithium_Atom.png", 
                  caption="Chemistry Research Portal", use_container_width=True)
 
-    st.info("🎯 **Our Plan:** To complete diagnostic module and consult Saathi AI for conceptual clarity.")
-    st.info("🎯**Our Goal:** To enhance the understding of core concepts of science.")
+        st.info("🎯**Our Goal:** 1) To enhance the understding of core concepts of science. 2) To enhance students' performance and engagement. 3) To increase learning outcomes.")
+        st.info("🎯 **Our Plan:** 1) Consult Saathi AI for clear science concepts. 2) To complete diagnostic module for clear conceptual understandings.")
+        st.info("🎯 **Our Appraoch:** 1) 24/7. 2) Personalized learning.")
 
 # --- MODULES VIEW (Tiers 1-4) ---
 def render_modules(uid, group):
