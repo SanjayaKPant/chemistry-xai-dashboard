@@ -158,3 +158,8 @@ def render_tier_5_6_form(uid, group, module):
             st.session_state.mastery_triggered = False
             st.success("Data saved. Moving to next concept.")
             st.rerun()
+
+def render_progress(uid):
+    st.header("📈 My Progress")
+    st.info("Your learning analytics are being compiled based on Socratic interactions.")
+    
