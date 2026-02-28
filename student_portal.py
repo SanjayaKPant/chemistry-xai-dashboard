@@ -140,8 +140,7 @@ def render_ai_chat(uid, group):
 
 def render_tier_5_6_form(uid, group, module):
     st.success("🌟 Great! I think You developed right concept./ मलाई लाग्छ तपाईंले सही अवधारणा विकास गर्नुभयो। Final Step:")
-    st.info("Based on your discussion, would you like to keep or change your original answer? / साथी एआईसँगको छलफलको आधारमा, के तपाईं आफ्नो अघिल्लो उत्तर राख्न वा परिमार्जन गर्न चाहनुहुन्छ?
-")
+    st.info("Based on your discussion, would you like to keep or change your original answer? / साथी एआईसँगको छलफलको आधारमा, के तपाईं आफ्नो अघिल्लो उत्तर राख्न वा परिमार्जन गर्न चाहनुहुन्छ?")
     
     with st.form("tier5_6"):
         t5 = st.radio("Final Answer (Tier 5):", [module['Option_A'], module['Option_B'], module['Option_C'], module['Option_D']])
