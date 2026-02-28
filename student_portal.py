@@ -34,41 +34,47 @@ def show():
     user = st.session_state.user
     uid, group = str(user.get('User_ID', '')).upper(), str(user.get('Group', 'Control'))
 
-    # Bilingual Sidebar
+    # SIDEBAR
     st.sidebar.markdown(f"### 🎓 {user.get('Name')}")
     menu = {
-        "🏠 Dashboard": "ड्यासबोर्ड",
-        "📚 Learning Modules": "सिकाई मोड्युलहरू",
-        "🤖 Saathi AI": "साथी AI",
-        "📈 My Progress": "मेरो प्रगति"
+        "🏠 Dashboard": "🏠 ड्यासबोर्ड",
+        "📚 Learning Modules": "📚 सिकाई मोड्युलहरू",
+        "🤖 Saathi AI": "🤖 साथी AI",
+        "📈 My Progress": "📈 मेरो प्रगति"
     }
-    choice = st.sidebar.radio("Navigation / नेभिगेसन", list(menu.keys()), 
-                              format_func=lambda x: f"{x} ({menu[x]})")
+    
+    # Initialize navigation if not exists
+    if "current_nav" not in st.session_state:
+        st.session_state.current_nav = "🏠 Dashboard"
 
-    if choice == "🏠 Dashboard": render_dashboard(user)
-    elif choice == "📚 Learning Modules": render_modules(uid, group)
-    elif choice == "🤖 Saathi AI": render_ai_chat(uid, group)
-    elif choice == "📈 My Progress": render_progress(uid)
+    # Navigation Radio
+    choice = st.sidebar.radio("Navigation", list(menu.keys()), 
+                              index=list(menu.keys()).index(st.session_state.current_nav),
+                              format_func=lambda x: f"{x} ({menu[x]})",
+                              key="nav_radio")
+    
+    # Update current nav based on radio selection
+    st.session_state.current_nav = choice
 
-# Dashboard Design
+    if st.session_state.current_nav == "🏠 Dashboard": render_dashboard(user)
+    elif st.session_state.current_nav == "📚 Learning Modules": render_modules(uid, group)
+    elif st.session_state.current_nav == "🤖 Saathi AI": render_ai_chat(uid, group)
+    elif st.session_state.current_nav == "📈 My Progress": render_progress(uid)
+
 def render_dashboard(user):
     now = get_nepal_time()
     st.title(f"Namaste, {user.get('Name')}! 🙏")
-    st.markdown("<p class='bilingual-hint'>Welcome to science learning portal / विज्ञान सिकाइ पोर्टलमा तपाईंलाई स्वागत छ।</p>", unsafe_allow_html=True)
-
+    
     col1, col2, col3 = st.columns([1, 1, 1])
     with col1:
-        st.metric("🕒 Time", now.strftime("%I:%M %p"))
+        st.metric("🕒 Nepal Time", now.strftime("%I:%M %p"))
     with col2:
         st.metric("📅 Date", now.strftime("%b %d, %Y"))
     with col3:
-        # 3D Image
-        
-        st.info("🎯**Our Goal:** 1) To enhance the understding of core concepts of science. 2) To enhance students' performance and engagement. 3) To increase learning outcomes.")
-        st.info("🎯 **Our Plan:** 1) Consult Saathi AI for clear science concepts. 2) To complete diagnostic module for clear conceptual understandings.")
-        st.info("🎯 **Our Appraoch:** 1) 24/7. 2) Personalized learning.")
+        st.image("https://upload.wikimedia.org/wikipedia/commons/e/e1/Stylised_Lithium_Atom.png", width=120)
 
-# Modules(Tiers 1-4)
+    st.info("🎯 **Goal:** Complete your modules and engage in Socratic dialogue to master concepts.")
+
 def render_modules(uid, group):
     st.header("📚 Learning Modules")
     client = get_gspread_client()
@@ -79,67 +85,75 @@ def render_modules(uid, group):
     
     finished = logs_df[(logs_df['User_ID'].astype(str).str.upper() == uid) & (logs_df['Status'] == 'POST')]['Module_ID'].tolist()
     available = m_df[m_df['Group'].astype(str) == group]
-    active = next((row for _, row in available.iterrows() if row['Sub_Title'] not in finished), None)
+    
+    active = None
+    for _, row in available.iterrows():
+        if row['Sub_Title'] not in finished:
+            active = row
+            break
 
     if active is not None:
-        st.subheader(f"📖 Module #{active.get('Module_No', '1')}: {active['Sub_Title']}")
-        with st.container():
-            with st.form("t14_form"):
-                st.write(f"**Question / प्रश्न:** {active['Diagnostic_Question']}")
-                opts = [active['Option_A'], active['Option_B'], active['Option_C'], active['Option_D']]
-                t1 = st.radio("Choose Answer / उत्तर छान्नुहोस्:", opts)
-                t2 = st.select_slider("Confidence / आत्मविश्वास:", ["Guessing", "Unsure", "Sure", "Very Sure"])
-                t3 = st.text_area("Provide Reasoning / कारण दिनुहोस् (Tier 3):")
-                t4 = st.select_slider("Reasoning Confidence:", ["Guessing", "Unsure", "Sure", "Very Sure"])
-                
-                if st.form_submit_button("Submit & Discuss with Saathi AI"):
-                    st.session_state.current_module = active
+        st.subheader(f"📖 {active['Sub_Title']}")
+        with st.form("t14_form"):
+            st.write(f"**Question:** {active['Diagnostic_Question']}")
+            opts = [active['Option_A'], active['Option_B'], active['Option_C'], active['Option_D']]
+            t1 = st.radio("Choose Answer:", opts)
+            t2 = st.select_slider("Confidence in Answer:", ["Guessing", "Unsure", "Sure", "Very Sure"])
+            t3 = st.text_area("Provide Reasoning (Tier 3):")
+            t4 = st.select_slider("Confidence in Reasoning (Tier 4):", ["Guessing", "Unsure", "Sure", "Very Sure"])
+            
+            if st.form_submit_button("Submit & Start Discussion"):
+                if not t3 or len(t3.strip()) < 5:
+                    st.error("❌ Please provide a reason (Tier 3) to continue.")
+                else:
                     log_assessment(uid, group, active['Sub_Title'], t1, t2, t3, t4, "INITIAL", get_nepal_time().strftime("%Y-%m-%d %H:%M"))
-                    st.switch_page("student_portal.py") # Or manual tab switch
-                   
+                    st.session_state.active_module = active.to_dict()
+                    
+                    # FIXED: Instead of st.switch_page, we update the navigation state
+                    st.session_state.current_nav = "🤖 Saathi AI"
+                    st.success("Logged! Redirecting to Saathi AI...")
+                    st.rerun()
     else:
-        st.balloons()
-        st.success("All assigned modules complete! / सबै मोड्युलहरू पूरा भए!")
+        st.success("All modules completed!")
 
-# AI chat with Tier 5 and Tier 6
 def render_ai_chat(uid, group):
-    module = st.session_state.get('current_module')
-    if not module:
-        st.warning("Please select a module first.")
+    module = st.session_state.get('active_module')
+    if module is None:
+        st.warning("Please complete a module question first.")
         return
 
-    st.subheader(f"🤖 Discussing: {module['Sub_Title']}")
-    
-    # Detecting Learning Mastery
     if st.session_state.get('mastery_triggered'):
         render_tier_5_6_form(uid, group, module)
         return
 
-    # Chat logic (GPT-4o)
+    st.subheader(f"🤖 Discussion: {module['Sub_Title']}")
     if "messages" not in st.session_state:
-        st.session_state.messages = [{"role": "system", "content": f"Socratic Tutor. Topic: {module['Sub_Title']}. Guide via questioning."}]
+        st.session_state.messages = [{"role": "system", "content": SOCRATIC_NORMS}]
 
-    for msg in st.session_state.messages[1:]:
-        with st.chat_message(msg["role"]): st.markdown(msg["content"])
+    for m in st.session_state.messages[1:]:
+        with st.chat_message(m["role"]): st.markdown(m["content"])
 
-    if prompt := st.chat_input("Chat with Saathi..."):
+    if prompt := st.chat_input("Explain your logic..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-        response = client.chat.completions.create(model="gpt-4o", messages=st.session_state.messages)
-        ai_msg = response.choices[0].message.content
         
-        # Persistance: Save trace to DB immediately
-        log_temporal_trace(uid, "CHAT_LOG", f"Topic: {module['Sub_Title']} | Msg: {prompt}")
+        try:
+            client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+            resp = client.chat.completions.create(model="gpt-4o", messages=st.session_state.messages)
+            ai_msg = resp.choices[0].message.content
+            
+            log_temporal_trace(uid, "CHAT_LOG", f"Topic: {module['Sub_Title']} | Msg: {prompt}")
 
-        if "[MASTERY_DETECTED]" in ai_msg:
-            st.session_state.mastery_triggered = True
+            if "[MASTERY_DETECTED]" in ai_msg:
+                st.session_state.mastery_triggered = True
+                st.rerun()
+
+            st.session_state.messages.append({"role": "assistant", "content": ai_msg})
             st.rerun()
-
-        st.session_state.messages.append({"role": "assistant", "content": ai_msg})
-        st.rerun()
+        except Exception as e:
+            st.error(f"AI Error: {e}")
 
 def render_tier_5_6_form(uid, group, module):
-    st.success("🌟 Great! I think You developed right concept./ मलाई लाग्छ तपाईंले सही अवधारणा विकास गर्नुभयो। Final Step:")
+    st.success("🌟 Mastery Detected! Final Step:")
     st.info("Based on your discussion, would you like to keep or change your original answer? / साथी एआईसँगको छलफलको आधारमा, के तपाईं आफ्नो अघिल्लो उत्तर राख्न वा परिमार्जन गर्न चाहनुहुन्छ?")
     
     with st.form("tier5_6"):
@@ -147,18 +161,14 @@ def render_tier_5_6_form(uid, group, module):
         t6 = st.select_slider("Final Confidence (Tier 6):", ["Guessing", "Unsure", "Sure", "Very Sure"])
         
         if st.form_submit_button("Confirm Mastery & Save"):
-            # LOG FINAL POST-TEST DATA
             log_assessment(uid, group, module['Sub_Title'], "N/A", "N/A", "Mastered via Chat", "N/A", "POST", 
                            get_nepal_time().strftime("%Y-%m-%d %H:%M"), t5, t6)
-            
-            # Reset for next module
-            del st.session_state.current_module
-            del st.session_state.messages
+            st.session_state.active_module = None
             st.session_state.mastery_triggered = False
-            st.success("Data saved. Moving to next concept.")
+            st.session_state.messages = []
+            st.session_state.current_nav = "🏠 Dashboard"
             st.rerun()
 
 def render_progress(uid):
     st.header("📈 My Progress")
-    st.info("Your learning analytics are being compiled based on Socratic interactions.")
-    
+    st.write("Tracking your conceptual growth...")
