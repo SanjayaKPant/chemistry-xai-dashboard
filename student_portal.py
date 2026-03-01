@@ -58,80 +58,80 @@ def render_dashboard(user):
     st.markdown("---")
     st.info("Goal: Complete the diagnostic questions in **'Learning Modules'** to unlock your Socratic discussion with Saathi AI.")
 
-# --- 3. THE 6-TIER DIAGNOSTIC ENGINE ---
+# --- 3. UPDATED MODULES (WITH ROBUST USER PARTITIONING) ---
 def render_modules(uid, group):
     st.header("📚 Learning Modules")
     try:
         client = get_gspread_client()
         sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
         
-        # Identify completed modules
+        # 1. Identify completed modules ONLY for THIS specific UID
         log_df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
         finished_modules = []
         if not log_df.empty:
-            finished_modules = log_df[(log_df['User_ID'].astype(str).str.upper() == uid) & (log_df['Status'] == 'POST')]['Module_ID'].tolist()
+            # SAFETY: Strip spaces from headers and values to prevent cross-user blocking
+            log_df.columns = [c.strip() for c in log_df.columns]
+            user_mask = (log_df['User_ID'].astype(str).str.upper().str.strip() == uid.strip().upper())
+            status_mask = (log_df['Status'].astype(str).str.strip() == 'POST')
+            
+            finished_modules = log_df[user_mask & status_mask]['Module_ID'].astype(str).str.strip().tolist()
 
-        # Load modules for this group
+        # 2. Load available modules for this specific Group
         m_df = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
-        available = m_df[m_df['Group'] == group]
+        # SAFETY: Strip group names to ensure exact matching
+        available = m_df[m_df['Group'].astype(str).str.strip() == group.strip()]
+
+        if available.empty:
+            st.warning(f"No modules found for group: {group}")
+            return
 
         active_row = None
         for _, row in available.iterrows():
-            if row['Sub_Title'] not in finished_modules:
+            # Check if this specific module title is in THIS user's finished list
+            if str(row['Sub_Title']).strip() not in finished_modules:
                 active_row = row
                 break 
 
         if active_row is None:
-            st.success("🎉 All modules complete! / सबै मोड्युलहरू पूरा भए!")
+            st.success("🎉 All modules complete for your account! / तपाईंको लागि सबै मोड्युलहरू पूरा भए!")
             return
 
+        # --- THE REST OF THE TIER 1-4 LOGIC REMAINS UNCHANGED ---
         m_id = active_row['Sub_Title']
         st.subheader(f"📖 Concept: {m_id}")
-        
         with st.expander("Learning Objectives", expanded=True):
             st.write(active_row.get('Objectives', 'Explore this concept.'))
 
-        # TIER 1-4 FORM
         st.write(f"**Diagnostic Question:**\n{active_row['Diagnostic_Question']}")
         opts = [active_row['Option_A'], active_row['Option_B'], active_row['Option_C'], active_row['Option_D']]
-        
         t1 = st.radio("तपाईंको उत्तर (Tier 1 Choice):", opts, key=f"t1_{m_id}")
-        t2 = st.select_slider("आत्मविश्वास (Tier 2 Confidence):", ["Guessing", "Unsure", "Sure", "Very Sure"], key=f"t2_{m_id}")
+        t2 = st.select_slider("आत्मविश्वास (Tier 2):", ["Guessing", "Unsure", "Sure", "Very Sure"], key=f"t2_{m_id}")
         t3 = st.text_area("तपाईंले किन यो उत्तर रोज्नुभयो? (Tier 3 Reasoning):", key=f"t3_{m_id}")
-        t4 = st.select_slider("तर्कमा आत्मविश्वास (Tier 4 Confidence):", ["Guessing", "Unsure", "Sure", "Very Sure"], key=f"t4_{m_id}")
+        t4 = st.select_slider("तर्कमा आत्मविश्वास (Tier 4):", ["Guessing", "Unsure", "Sure", "Very Sure"], key=f"t4_{m_id}")
 
         if st.button("Submit & Start Discussion"):
             if len(t3.strip()) < 5:
-                st.error("❌ Please provide a reasoning to continue.")
+                st.error("❌ Please provide reasoning to continue.")
             else:
-                # 1. Database Log
                 log_assessment(uid, group, m_id, t1, t2, t3, t4, "INITIAL", get_nepal_time())
-                
-                # 2. Context Injection Bridge
-                # Using .to_dict() prevents the "Ambiguous Series" crash
                 st.session_state.active_module = active_row.to_dict()
-                
-                # 3. Pre-seed AI Memory
                 st.session_state.messages = [
                     {"role": "system", "content": SOCRATIC_NORMS},
-                    {"role": "assistant", "content": f"Namaste! I see you chose **'{t1}'** because: *'{t3}'*. That's an interesting perspective! Let's explore that logic. Why do you think that specific option is more valid than the others?"}
+                    {"role": "assistant", "content": f"Namaste! I see you chose **'{t1}'** because: *'{t3}'*. Let's explore that logic..."}
                 ]
-                
                 st.session_state.current_tab = "🤖 साथी (Saathi) AI"
                 st.rerun()
 
     except Exception as e:
         st.error(f"Error loading modules: {e}")
 
-# --- 4. THE SPLIT-SCREEN INQUIRY TAB ---
+# --- 4. UPDATED SAATHI AI (RECORDING BOTH CHANNELS) ---
 def render_ai_chat(uid, group):
     module = st.session_state.get('active_module')
-    
     if not module:
         st.warning("⚠️ Please submit an initial answer in 'Learning Modules' first.")
         return
 
-    # SPLIT-SCREEN UI
     col_phenom, col_chat = st.columns([1, 1.5], gap="large")
 
     with col_phenom:
@@ -141,7 +141,6 @@ def render_ai_chat(uid, group):
             st.write(f"**Q:** {module['Diagnostic_Question']}")
             st.write("---")
             st.write(f"A) {module['Option_A']}\n\nB) {module['Option_B']}\n\nC) {module['Option_C']}\n\nD) {module['Option_D']}")
-        st.caption("Researcher Note: Question visibility reduces Split-Attention Effect.")
 
     with col_chat:
         if st.session_state.get('mastery_triggered'):
@@ -153,7 +152,8 @@ def render_ai_chat(uid, group):
         for m in st.session_state.messages[1:]:
             with st.chat_message(m["role"]): st.markdown(m["content"])
 
-        if prompt := st.chat_input("Speak to Saathi..."):
+        if prompt := st.chat_input("Explain your logic to Saathi..."):
+            # 1. Append Student Message
             st.session_state.messages.append({"role": "user", "content": prompt})
             
             with st.spinner("Analyzing your logic..."):
@@ -161,11 +161,16 @@ def render_ai_chat(uid, group):
                 resp = client.chat.completions.create(model="gpt-4o", messages=st.session_state.messages)
                 ai_msg = resp.choices[0].message.content
                 
+                # 2. Record BOTH to Temporal Traces for Research
+                # Log Student Message
+                log_temporal_trace(uid, "CHAT_MSG", f"Topic: {module['Sub_Title']} | Student: {prompt}")
+                # Log AI Message
+                log_temporal_trace(uid, "CHAT_MSG", f"Topic: {module['Sub_Title']} | Saathi AI: {ai_msg}")
+                
                 if "[MASTERY_DETECTED]" in ai_msg:
                     st.session_state.mastery_triggered = True
                 
                 st.session_state.messages.append({"role": "assistant", "content": ai_msg})
-                log_temporal_trace(uid, "CHAT_MSG", f"Topic: {module['Sub_Title']} | {prompt}")
                 st.rerun()
 
 # --- 5. TIER 5 & 6 (POST-DISCUSSION REVISION) ---
