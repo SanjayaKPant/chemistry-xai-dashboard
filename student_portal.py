@@ -194,6 +194,75 @@ def render_revision_form(uid, group, module):
 
 # --- 6. PROGRESS DASHBOARD ---
 def render_metacognitive_dashboard(uid):
-    st.title("📈 My Progress")
-    st.write("Tracking your conceptual growth...")
-    # Add Sankey or Radar charts here for PhD analytics
+    st.title("📈 मेरो प्रगति (My Progress Dashboard)")
+    st.markdown("---")
+
+    try:
+        client = get_gspread_client()
+        sh = client.open_by_key("1UqWkZKJdT2CQkZn5-MhEzpSRHsKE4qAeA17H0BOnK60")
+        log_df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
+
+        if log_df.empty:
+            st.info("No data available yet. Start a learning module to see your progress!")
+            return
+
+        # Filter for current user
+        user_data = log_df[log_df['User_ID'].astype(str).str.upper() == uid.upper()].copy()
+        
+        if user_data.empty:
+            st.info("Complete your first module to unlock analytics.")
+            return
+
+        # 1. TOP LEVEL METRICS
+        total_attempts = len(user_data)
+        mastered_count = len(user_data[user_data['Status'] == 'POST'])
+        
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Modules Explored", total_attempts)
+        m2.metric("Concepts Mastered", mastered_count)
+        m3.metric("Nepal Time", get_nepal_time().split()[1])
+
+        st.markdown("### 🧬 Conceptual Growth Analysis")
+        
+        # 2. CONFIDENCE EVOLUTION (Tier 2/4 vs Tier 6)
+        # Mapping confidence strings to numerical values for plotting
+        conf_map = {"Guessing": 1, "Unsure": 2, "Sure": 3, "Very Sure": 4}
+        
+        # We look for rows where we have both INITIAL and POST data
+        # For a PhD design, we want to see if confidence increases after Saathi AI's intervention
+        
+        plot_data = []
+        for module in user_data['Module_ID'].unique():
+            mod_rows = user_data[user_data['Module_ID'] == module]
+            initial = mod_rows[mod_rows['Status'] == 'INITIAL']
+            post = mod_rows[mod_rows['Status'] == 'POST']
+            
+            if not initial.empty and not post.empty:
+                plot_data.append({
+                    "Module": module,
+                    "Stage": "Before Saathi",
+                    "Confidence": conf_map.get(initial.iloc[0]['T2'], 1)
+                })
+                plot_data.append({
+                    "Module": module,
+                    "Stage": "After Saathi",
+                    "Confidence": conf_map.get(post.iloc[0]['T6'], 1)
+                })
+
+        if plot_data:
+            df_viz = pd.DataFrame(plot_data)
+            fig_conf = px.line(df_viz, x="Stage", y="Confidence", color="Module", 
+                               markers=True, title="Confidence Gain per Concept",
+                               labels={"Confidence": "Certainty Level (1-4)"})
+            fig_conf.update_layout(yaxis=dict(tickmode='array', tickvals=[1,2,3,4], 
+                                             ticktext=["Guessing", "Unsure", "Sure", "Very Sure"]))
+            st.plotly_chart(fig_conf, use_container_width=True)
+        
+        # 3. RECENT ACTIVITY LOG
+        st.markdown("### 📝 Learning Journal")
+        display_df = user_data[['Timestamp', 'Module_ID', 'Status', 'T1', 'T5']].sort_values(by='Timestamp', ascending=False)
+        display_df.columns = ["Time", "Concept", "Phase", "Initial Choice", "Final Choice"]
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+    except Exception as e:
+        st.error(f"Error loading dashboard: {e}")
