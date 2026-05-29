@@ -18,16 +18,24 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from openai import OpenAI
-from database_manager import get_gspread_client, log_assessment, log_temporal_trace
+from database_manager import (
+    get_gspread_client, log_assessment, log_temporal_trace,
+    log_tap_event, log_rep_event,
+)
 from datetime import datetime, timedelta
 
 # ── Import the multi-agent system ─────────────────────────────────────────────
 from agents import (
     AGENTS,
+    AGENT_SEQUENCE,
+    ALL_SIGNAL_CODES,
     initialise_agent,
     call_agent,
     detect_tap_level,
     detect_rep_level,
+    detect_hypothesis_quality,
+    detect_evidence_quality,
+    detect_communication_level,
     detect_redirect,
 )
 
@@ -57,9 +65,12 @@ def show():
     menu = [
         "🏠 Dashboard",
         "📚 Learning Modules",
-        "🤖 साथी (Saathi) AI",
+        "🔬 साथी (Saathi) AI",
+        "🔭 खोजी (Khoji) AI",
+        "🧪 प्रमाण (Praman) AI",
         "⚖️ तर्क (Tarka) AI",
         "🧬 रूपक (Rupak) AI",
+        "📝 सन्देश (Sandesh) AI",
         "📈 My Progress",
     ]
 
@@ -73,12 +84,15 @@ def show():
     )
     st.session_state.current_tab = choice
 
-    if   choice == "🏠 Dashboard":            render_dashboard(user)
-    elif choice == "📚 Learning Modules":     render_modules(uid, group)
-    elif choice == "🤖 साथी (Saathi) AI":    render_agent_chat(uid, group, "SAATHI")
-    elif choice == "⚖️ तर्क (Tarka) AI":     render_agent_chat(uid, group, "TARKA")
-    elif choice == "🧬 रूपक (Rupak) AI":     render_agent_chat(uid, group, "RUPAK")
-    elif choice == "📈 My Progress":          render_metacognitive_dashboard(uid)
+    if   choice == "🏠 Dashboard":              render_dashboard(user)
+    elif choice == "📚 Learning Modules":       render_modules(uid, group)
+    elif choice == "🔬 साथी (Saathi) AI":      render_agent_chat(uid, group, "SAATHI")
+    elif choice == "🔭 खोजी (Khoji) AI":       render_agent_chat(uid, group, "KHOJI")
+    elif choice == "🧪 प्रमाण (Praman) AI":    render_agent_chat(uid, group, "PRAMAN")
+    elif choice == "⚖️ तर्क (Tarka) AI":       render_agent_chat(uid, group, "TARKA")
+    elif choice == "🧬 रूपक (Rupak) AI":       render_agent_chat(uid, group, "RUPAK")
+    elif choice == "📝 सन्देश (Sandesh) AI":   render_agent_chat(uid, group, "SANDESH")
+    elif choice == "📈 My Progress":            render_metacognitive_dashboard(uid)
 
 # ── Sidebar agent progress tracker ────────────────────────────────────────────
 
@@ -106,7 +120,7 @@ def render_dashboard(user):
 
     # Multi-agent ecology overview
     st.markdown("### Your Learning Ecology")
-    cols = st.columns(3)
+    cols = st.columns(6)
     for i, (key, agent) in enumerate(AGENTS.items()):
         with cols[i]:
             with st.container(border=True):
@@ -117,9 +131,12 @@ def render_dashboard(user):
 
     st.markdown("---")
     st.info(
-        "**Step 1:** Complete the four-tier diagnostic in **Learning Modules** to unlock Saathi AI.\n\n"
-        "**Step 2:** After Saathi, build your scientific argument with **Tarka AI**.\n\n"
-        "**Step 3:** Explore models and representations with **Rupak AI**."
+        "**Step 1:** Complete the diagnostic in **Learning Modules** to unlock **Saathi AI** 🔬\n\n"
+        "**Step 2:** Form a scientific question with **Khoji AI** 🔭\n\n"
+        "**Step 3:** Evaluate your evidence with **Praman AI** 🧪\n\n"
+        "**Step 4:** Build your argument with **Tarka AI** ⚖️\n\n"
+        "**Step 5:** Navigate representations with **Rupak AI** 🧬\n\n"
+        "**Step 6:** Communicate your science with **Sandesh AI** 📝"
     )
 
 # ── Modules (four-tier diagnostic — UNCHANGED from original) ──────────────────
@@ -216,31 +233,40 @@ def render_agent_chat(uid: str, group: str, agent_key: str):
     msg_key = f"{agent_key.lower()}_messages"
 
     # ── Unlock gate ────────────────────────────────────────────────────────────
-    if agent_key == "TARKA":
-        if not st.session_state.get("agent_completed", {}).get("SAATHI"):
-            st.warning("⚠️ Complete your discussion with **Saathi AI** first to unlock Tarka.")
-            if st.button("Go to Saathi AI"):
-                st.session_state.current_tab = "🤖 साथी (Saathi) AI"
+    # ── Six-agent sequential unlock gates ────────────────────────────────────
+    UNLOCK_MAP = {
+        "KHOJI":   ("SAATHI",  "🔬 साथी (Saathi) AI"),
+        "PRAMAN":  ("KHOJI",   "🔭 खोजी (Khoji) AI"),
+        "TARKA":   ("PRAMAN",  "🧪 प्रमाण (Praman) AI"),
+        "RUPAK":   ("TARKA",   "⚖️ तर्क (Tarka) AI"),
+        "SANDESH": ("RUPAK",   "🧬 रूपक (Rupak) AI"),
+    }
+    if agent_key in UNLOCK_MAP:
+        prereq_key, prereq_tab = UNLOCK_MAP[agent_key]
+        if not st.session_state.get("agent_completed", {}).get(prereq_key):
+            prereq_name = AGENTS[prereq_key]["name"]
+            st.warning(
+                f"⚠️ Complete **{prereq_name}** first to unlock "
+                f"**{AGENTS[agent_key]['name']}**."
+            )
+            if st.button(f"Go to {prereq_name}"):
+                st.session_state.current_tab = prereq_tab
                 st.rerun()
             return
-        # First visit: initialise Tarka
         if st.session_state.get(msg_key) is None:
-            tap = st.session_state.get("current_tap_level", "TAP_1")
-            ctx = {**st.session_state.get("agent_context", {}), "tap_level": tap}
-            st.session_state[msg_key] = initialise_agent("TARKA", ctx)
+            ctx = {
+                **st.session_state.get("agent_context", {}),
+                "tap_level": st.session_state.get("current_tap_level", "TAP_1"),
+                "rep_level": st.session_state.get("current_rep_level", "MONADIC"),
+            }
+            st.session_state[msg_key]             = initialise_agent(agent_key, ctx)
+            st.session_state[f"{agent_key.lower()}_turn"] = 0
+
+    if agent_key == "TARKA":
+        pass  # initialised above via UNLOCK_MAP
 
     if agent_key == "RUPAK":
-        if not st.session_state.get("agent_completed", {}).get("TARKA"):
-            st.warning("⚠️ Complete your argumentation with **Tarka AI** first to unlock Rupak.")
-            if st.button("Go to Tarka AI"):
-                st.session_state.current_tab = "⚖️ तर्क (Tarka) AI"
-                st.rerun()
-            return
-        # First visit: initialise Rupak
-        if st.session_state.get(msg_key) is None:
-            rep = st.session_state.get("current_rep_level", "macroscopic level")
-            ctx = {**st.session_state.get("agent_context", {}), "rep_level": rep}
-            st.session_state[msg_key] = initialise_agent("RUPAK", ctx)
+        pass  # initialised above via UNLOCK_MAP
 
     messages = st.session_state.get(msg_key, [])
 
@@ -302,15 +328,8 @@ def render_agent_chat(uid: str, group: str, agent_key: str):
         for m in messages[1:]:
             with st.chat_message(m["role"]):
                 # Clean signal codes from display
-                display_content = m["content"]
-                for code in [
-                    "[MASTERY_DETECTED]", "[TAP_LEVEL_5_DETECTED]",
-                    "[TAP_LEVEL_4_DETECTED]", "[TAP_LEVEL_3_DETECTED]",
-                    "[TAP_LEVEL_2_DETECTED]", "[TAP_LEVEL_1_DETECTED]",
-                    "[TRIADIC_FLUENCY_DETECTED]", "[BIADIC_REPRESENTATION_DETECTED]",
-                    "[MONADIC_CONFINEMENT_DETECTED]", "[REDIRECT_TO_TARKA]",
-                    "[REDIRECT_TO_RUPAK]", "[REDIRECT_TO_SAATHI]",
-                ]:
+                display_content = m.get("content", "")
+                for code in ALL_SIGNAL_CODES:
                     display_content = display_content.replace(code, "")
                 st.markdown(display_content.strip())
 
@@ -352,6 +371,28 @@ def render_agent_chat(uid: str, group: str, agent_key: str):
                 f"{tap_signal}{rep_signal}|Msg:{ai_content}"
             )
 
+            # ── Granular research logging for ArgLog / RepLog ─────────────────
+            if agent_key == 'TARKA':
+                st.session_state['tarka_turn'] = (
+                    st.session_state.get('tarka_turn', 0) + 1
+                )
+                log_tap_event(
+                    uid, group, topic,
+                    result.get('tap_level'),
+                    st.session_state['tarka_turn'],
+                    prompt, ai_content,
+                )
+            if agent_key == 'RUPAK':
+                st.session_state['rupak_turn'] = (
+                    st.session_state.get('rupak_turn', 0) + 1
+                )
+                log_rep_event(
+                    uid, group, topic,
+                    result.get('rep_level'),
+                    st.session_state['rupak_turn'],
+                    prompt, ai_content,
+                )
+
             # ── Update research state ─────────────────────────────────────────
             if result["tap_level"]:
                 st.session_state.current_tap_level = result["tap_level"]
@@ -379,17 +420,46 @@ def render_agent_chat(uid: str, group: str, agent_key: str):
                         "N/A", f"TAP_COMPLETE_{tap}", get_nepal_time()
                     )
 
+            if agent_key == "KHOJI":
+                hq = result.get("hypothesis_level")
+                if hq == "HYPOTHESIS":
+                    completed_agents = st.session_state.get("agent_completed", {})
+                    completed_agents["KHOJI"] = True
+                    st.session_state.agent_completed = completed_agents
+                    log_temporal_trace(uid, "KHOJI_COMPLETE",
+                        f"Topic:{topic}|HypothesisFormed")
+
+            if agent_key == "PRAMAN":
+                eq = result.get("evidence_level")
+                if eq == "EQ3":
+                    completed_agents = st.session_state.get("agent_completed", {})
+                    completed_agents["PRAMAN"] = True
+                    st.session_state.agent_completed = completed_agents
+                    log_temporal_trace(uid, "PRAMAN_COMPLETE",
+                        f"Topic:{topic}|EvidenceQuality:EQ3")
+
             if agent_key == "RUPAK":
                 if result.get("triadic"):
                     completed_agents = st.session_state.get("agent_completed", {})
                     completed_agents["RUPAK"] = True
                     st.session_state.agent_completed = completed_agents
-                    # Log modelling completion to database
                     log_assessment(
                         uid, group, topic,
                         "N/A", "N/A",
                         "Representational fluency achieved: TRIADIC",
                         "N/A", "TRIADIC_COMPLETE", get_nepal_time()
+                    )
+
+            if agent_key == "SANDESH":
+                if result.get("comm_complete"):
+                    completed_agents = st.session_state.get("agent_completed", {})
+                    completed_agents["SANDESH"] = True
+                    st.session_state.agent_completed = completed_agents
+                    log_assessment(
+                        uid, group, topic,
+                        "N/A", "N/A",
+                        "Full ecology complete: science communication achieved",
+                        "N/A", "ECOLOGY_COMPLETE", get_nepal_time()
                     )
 
             # ── Handle redirect protocol ──────────────────────────────────────
