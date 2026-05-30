@@ -1,6 +1,6 @@
 """
 agents.py — MMALE Complete Six-Agent System
-=============================================
+============================================
 Full implementation of all six epistemically differentiated AI agents:
 
   Saathi  (साथी)   — Diagnostic & Misconception Detection
