@@ -17,6 +17,7 @@ Fixes applied in this version (12 issues resolved):
   11. Revision form routes to correct 6-agent tab names
   12. render_modules and metacognitive dashboard use get_spreadsheet()
 
+
 Group behaviour:
   CON   — Four-tier diagnostic only. No AI. Pre/post data collected.
   SA    — Saathi AI only. Diagnostic + Socratic misconception correction.
