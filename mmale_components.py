@@ -91,6 +91,8 @@ def render_orientation(group_code: str, lang: str = "ne"):
     Shown on student dashboard before starting any agent.
     Adapts content to the student's research group.
     """
+    from config import normalise_group
+    group_code = normalise_group(group_code)   # handle "Control" → "CON" etc.
     accessible = get_accessible_agents(group_code)
     cfg        = get_group_config(group_code)
 
@@ -119,6 +121,8 @@ def render_orientation(group_code: str, lang: str = "ne"):
         return
 
     # Display only accessible agents
+    if not accessible:   # safety: CON group or unknown → no columns
+        return
     cols = st.columns(len(accessible))
     for i, key in enumerate(accessible):
         info = PRACTICE_DESCRIPTIONS.get(key, {})
@@ -388,6 +392,8 @@ def call_agent_vision(messages: list, api_key: str, is_vision: bool = False) -> 
 
 def render_group_info(group_code: str, lang: str = "ne"):
     """Compact sidebar panel showing what the student's group can access."""
+    from config import normalise_group
+    group_code = normalise_group(group_code)
     cfg = get_group_config(group_code)
 
     if lang == "ko":
@@ -415,6 +421,8 @@ def render_group_info(group_code: str, lang: str = "ne"):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def render_progress_journey(group_code: str, lang: str = "ne"):
+    from config import normalise_group
+    group_code = normalise_group(group_code)
     """
     Visual progress tracker for the sidebar.
     Shows agent sequence with completion status.
