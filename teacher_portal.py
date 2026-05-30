@@ -95,8 +95,8 @@ def show():
                 placeholder="e.g., Ionic Bonding",
             )
             group = st.selectbox(
-                "Assign To Research Group",
-                ["School A", "School B", "Control Group"],
+                "연구 그룹 배정 (Assign To Research Group)",
+                ["MMALE", "MA", "SA", "CON"],
             )
             objectives = st.text_area(
                 "Learning Objectives (PhD Requirement)",
@@ -379,7 +379,7 @@ def show():
             a_title = st.text_input("Assignment Title")
             a_desc  = st.text_area("Instructions")
             a_group = st.selectbox(
-                "Target Group", ["School A", "School B"], key="assign_group"
+                "대상 그룹 (Target Group)", ["MMALE", "MA", "SA", "CON"], key="assign_group"
             )
             a_file = st.file_uploader("Upload Worksheet (Optional)", key="assign_file")
 
