@@ -17,7 +17,6 @@ Fixes applied in this version (12 issues resolved):
   11. Revision form routes to correct 6-agent tab names
   12. render_modules and metacognitive dashboard use get_spreadsheet()
 
-
 Group behaviour:
   CON   — Four-tier diagnostic only. No AI. Pre/post data collected.
   SA    — Saathi AI only. Diagnostic + Socratic misconception correction.
@@ -118,8 +117,9 @@ def show():
 
     user  = st.session_state.user
     uid   = str(user.get("User_ID", "")).upper()
-    # FIX 4: default to CON, not 'School A'
-    group = str(user.get("Group", "CON")).strip().upper()
+    # FIX 4: normalise group name ("Control" → "CON", "School A" → "SA" etc.)
+    from config import normalise_group
+    group = normalise_group(str(user.get("Group", "CON")))
 
     # ── Language ──────────────────────────────────────────────────────────────
     lang = render_language_selector(sidebar=True)   # FIX 7
@@ -242,9 +242,30 @@ def render_modules(uid: str, group: str, lang: str = "ne"):
                 .astype(str).str.strip().tolist()
             )
 
-        m_df      = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
-        available = m_df[m_df["Group"].astype(str).str.strip().str.upper()
-                         == group.strip().upper()]
+        m_df = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
+
+        # Safety: empty sheet or missing header → no modules yet
+        if m_df.empty:
+            st.info("No modules deployed yet. Please wait for your teacher to add content." if lang == "en"
+                    else "모듈이 아직 없습니다. 선생님을 기다려주세요." if lang == "ko"
+                    else "अहिलेसम्म कुनै मोड्युल छैन। कृपया शिक्षकको प्रतीक्षा गर्नुहोस्।")
+            return
+
+        # Detect group column (handles "Group", "group", spaces)
+        group_col = next(
+            (c for c in m_df.columns if c.strip().upper() == "GROUP"), None
+        )
+        if group_col is None:
+            st.warning("Instructional_Materials sheet is missing a 'Group' column. "
+                       "Please check with your administrator.")
+            return
+
+        # Match both new codes (SA/MA/MMALE/CON) AND old names (School A etc.)
+        from config import GROUP_ALIASES, normalise_group
+        aliases = GROUP_ALIASES.get(group, [group])
+        available = m_df[
+            m_df[group_col].astype(str).str.strip().str.upper().isin(aliases)
+        ]
 
         if available.empty:
             st.warning(f"No modules found for group: {group}")
