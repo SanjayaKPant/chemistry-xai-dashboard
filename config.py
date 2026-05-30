@@ -300,3 +300,52 @@ def inject_language(system_prompt: str, lang: str) -> str:
     """
     instruction = LANGUAGE_INSTRUCTION.get(lang, LANGUAGE_INSTRUCTION["en"])
     return system_prompt + f"\n\nLANGUAGE INSTRUCTION: {instruction}"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# GROUP NAME NORMALISATION
+# ═══════════════════════════════════════════════════════════════════════════════
+# The Participants sheet may store group names in various formats depending on
+# when and how students were added (old: "School A", new: "SA", etc.).
+# normalise_group() converts any known variant to the canonical 4-code system.
+
+GROUP_ALIASES = {
+    "CON":   ["CON", "CONTROL", "CONTROL GROUP", "CONTROL_GROUP"],
+    "SA":    ["SA", "SCHOOL A", "SCHOOL_A", "EXP_A", "EXPA",
+              "SINGLE AGENT", "SINGLE_AGENT"],
+    "MA":    ["MA", "SCHOOL B", "SCHOOL_B", "EXP_B", "EXPB",
+              "MULTIPLE AGENTS", "MULTIPLE_AGENTS", "MULTI AGENT",
+              "MULTI_AGENT"],
+    "MMALE": ["MMALE", "MULTIMODAL", "FULL MMALE", "FULL_MMALE",
+              "MMALE_FULL", "FULL ECOLOGY"],
+}
+
+def normalise_group(group_code: str) -> str:
+    """
+    Converts any known group name variant to canonical code.
+    Examples:
+      "Control"  → "CON"
+      "School A" → "SA"
+      "Exp_B"    → "MA"
+      "SA"       → "SA"   (already canonical)
+    Falls back to "CON" if completely unrecognised.
+    """
+    code = str(group_code).upper().strip()
+    for canonical, aliases in GROUP_ALIASES.items():
+        if code in aliases:
+            return canonical
+    return "CON"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# KOREAN PRACTICE LABELS
+# (used in student_portal and mmale_components for Korean UI)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+KOREAN_PRACTICE = {
+    "SAATHI":  ("진단",    "오개념 진단 및 소크라테스 대화"),
+    "KHOJI":   ("탐구",    "과학적 질문과 가설 형성"),
+    "PRAMAN":  ("증거",    "증거 평가 및 데이터 분석"),
+    "TARKA":   ("논증",    "Toulmin 논증 패턴 (TAP)"),
+    "RUPAK":   ("모델링",  "Johnstone 삼각형 탐색"),
+    "SANDESH": ("소통",    "이중언어 과학 의사소통"),
+}
