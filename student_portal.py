@@ -1,6 +1,6 @@
 """
 student_portal.py — MMALE Student Interface (Final)
-====================================================
+=====================================================
 Fixes applied in this version (12 issues resolved):
 
   1.  get_spreadsheet() replaces open_by_key() everywhere — performance fix
@@ -272,6 +272,14 @@ def render_modules(uid: str, group: str, lang: str = "ne"):
             st.warning(f"No modules found for group: {group}")
             return
 
+        # Check if CON student just submitted and needs Tier 5-6 form
+        for _, row in available.iterrows():
+            m_id_check = str(row["Sub_Title"]).strip()
+            if st.session_state.get(f"con_post_{m_id_check}", False):
+                st.session_state[f"con_post_{m_id_check}"] = False
+                render_con_post_form(uid, group, row.to_dict(), lang)
+                return
+
         active_row = None
         for _, row in available.iterrows():
             if str(row["Sub_Title"]).strip() not in finished_modules:
@@ -333,8 +341,12 @@ def render_modules(uid: str, group: str, lang: str = "ne"):
                        if lang == "en" else "❌ कृपया तर्क प्रदान गर्नुहोस्।")
                 st.error(err)
             else:
-                log_assessment(uid, group, m_id, t1, t2, t3, t4,
-                               "INITIAL", get_nepal_time())
+                # Guard against double-logging on rerun
+                already_logged = st.session_state.get(f"submitted_{m_id}", False)
+                if not already_logged:
+                    log_assessment(uid, group, m_id, t1, t2, t3, t4,
+                                   "INITIAL", get_nepal_time())
+                    st.session_state[f"submitted_{m_id}"] = True
 
                 context = {
                     "topic":         m_id,
@@ -357,9 +369,11 @@ def render_modules(uid: str, group: str, lang: str = "ne"):
                     st.session_state[f"{key}_messages"] = None
                     st.session_state[f"{key}_turn"]     = 0
 
-                # FIX 5: CON group stays in modules; others go to Saathi
+                # CON group stays in modules for Tier 5-6 revision form
+                # Other groups go to Saathi AI
                 if is_control(group):
                     st.session_state.current_tab = "📚 Learning Modules"
+                    st.session_state[f"con_post_{m_id}"] = True
                 else:
                     st.session_state.current_tab = AGENT_TAB_MAP["SAATHI"]
                 st.rerun()
