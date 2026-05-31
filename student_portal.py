@@ -51,6 +51,7 @@ from config import (
 )
 
 # ── UI components ─────────────────────────────────────────────────────────────
+from sandesh_module import render_sandesh_open_response
 from mmale_components import (
     render_orientation, render_rupak_multimodal,
     render_group_info, render_progress_journey,
@@ -335,7 +336,13 @@ def render_modules(uid: str, group: str, lang: str = "ne"):
                 log_assessment(uid, group, m_id, t1, t2, t3, t4,
                                "INITIAL", get_nepal_time())
 
-                context = {"topic": m_id, "t1": t1, "t3": t3}
+                context = {
+                    "topic":         m_id,
+                    "t1":            t1,
+                    "t3":            t3,
+                    "socratic_tree": str(active_row.get("Socratic_Tree", "")),
+                    "lang":          lang,
+                }
                 st.session_state.active_module     = active_row.to_dict()
                 st.session_state.active_agent      = "SAATHI"
                 st.session_state.saathi_messages   = initialise_agent("SAATHI", context)
@@ -483,6 +490,7 @@ def render_agent_chat(uid: str, group: str, agent_key: str, lang: str = "ne"):
                 **st.session_state.get("agent_context", {}),
                 "tap_level": st.session_state.get("current_tap_level", "TAP_1"),
                 "rep_level": st.session_state.get("current_rep_level", "MONADIC"),
+                "lang":      lang,
             }
             st.session_state[msg_key] = initialise_agent(agent_key, ctx)
             st.session_state[f"{agent_key.lower()}_turn"] = 0
@@ -535,6 +543,14 @@ def render_agent_chat(uid: str, group: str, agent_key: str, lang: str = "ne"):
     if agent_key == "RUPAK" and is_multimodal(group):
         render_rupak_multimodal(uid, group, module, lang)
         return
+
+    # ── Sandesh open-response detection ───────────────────────────────────────
+    # Modules with Correct_Answer == "OPEN_RESPONSE" use the rubric system
+    if agent_key == "SANDESH":
+        correct_ans = str(module.get("Correct_Answer", "")).strip().upper()
+        if correct_ans == "OPEN_RESPONSE" or not correct_ans.startswith("OPTION"):
+            render_sandesh_open_response(uid, group, module, lang)
+            return
 
     # ── Standard two-column chat layout ──────────────────────────────────────
     col_phenom, col_chat = st.columns([1, 1.5], gap="large")
