@@ -1,6 +1,6 @@
 """
 student_portal.py — MMALE Student Interface (Final)
-=====================================================
+====================================================
 Fixes applied in this version (12 issues resolved):
 
   1.  get_spreadsheet() replaces open_by_key() everywhere — performance fix
