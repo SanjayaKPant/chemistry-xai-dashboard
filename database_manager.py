@@ -535,3 +535,127 @@ def save_assignment(teacher_id, group, title, desc, file_url):
         return True
     except:
         return False
+
+# ── Open-response logging for Sandesh and synthesis items ────────────────────
+
+# Status codes that indicate open-response (not multiple-choice)
+OPEN_RESPONSE_STATUSES = {
+    "SANDESH_DRAFT", "SANDESH_REVISED", "SYNTHESIS_DRAFT",
+    "SYNTHESIS_REVISED", "COMM_DRAFT", "COMM_REVISED",
+}
+
+def log_open_response(uid: str, group: str, module_id: str,
+                      item_num: int, phase: str,
+                      response_text: str, self_rating: int,
+                      timestamp: str) -> bool:
+    """
+    Logs open-response answers for Sandesh and synthesis questions.
+    Writes to a dedicated OpenResponse sheet — does NOT attempt
+    answer-key comparison (which is meaningless for constructed responses).
+
+    Args:
+        uid          : Student User_ID
+        group        : Research group (CON/SA/MA/MMALE)
+        module_id    : Sub_Title of the module
+        item_num     : Question number (15, 16, 18)
+        phase        : 'DRAFT' (before AI) or 'REVISED' (after AI)
+        response_text: The student's written response
+        self_rating  : Student's self-assessment 1-4
+        timestamp    : Nepal time string
+    """
+    try:
+        sh = get_spreadsheet()
+
+        try:
+            ws = sh.worksheet("OpenResponse")
+        except Exception:
+            ws = sh.add_worksheet(title="OpenResponse", rows=2000, cols=9)
+            ws.append_row([
+                "Timestamp", "User_ID", "Group", "Module_ID",
+                "Item_Num", "Phase", "Response_Text",
+                "Self_Rating", "Word_Count",
+            ])
+
+        word_count = len(str(response_text).split())
+        ws.append_row([
+            timestamp,
+            str(uid).upper(),
+            group,
+            module_id,
+            item_num,
+            phase,
+            str(response_text)[:1000],  # truncate for cell limit
+            self_rating,
+            word_count,
+        ])
+        return True
+    except Exception as e:
+        st.error(f"OpenResponse Log Error: {e}")
+        return False
+
+
+def log_reflection_survey(uid: str, group: str,
+                          ai_helped_understanding: int,
+                          ai_helped_answering: int,
+                          hardest_agent: str,
+                          most_useful_agent: str,
+                          open_comment: str,
+                          timestamp: str) -> bool:
+    """
+    Logs the post-study student reflection survey (Q18 part d).
+    Stored separately from in-system assessment data to avoid
+    demand characteristics contaminating during-study responses.
+
+    ai_helped_understanding : 1-5 Likert (1=not at all, 5=very much)
+    ai_helped_answering     : 1-5 Likert (distinguishes performance/learning)
+    hardest_agent           : which agent was most challenging
+    most_useful_agent       : which agent was most helpful
+    open_comment            : free text reflection
+    """
+    try:
+        sh = get_spreadsheet()
+
+        try:
+            ws = sh.worksheet("ReflectionSurvey")
+        except Exception:
+            ws = sh.add_worksheet(title="ReflectionSurvey", rows=1000, cols=8)
+            ws.append_row([
+                "Timestamp", "User_ID", "Group",
+                "AI_Helped_Understanding_1to5",
+                "AI_Helped_Answering_1to5",
+                "Hardest_Agent", "Most_Useful_Agent", "Comment",
+            ])
+
+        ws.append_row([
+            timestamp,
+            str(uid).upper(),
+            group,
+            ai_helped_understanding,
+            ai_helped_answering,
+            hardest_agent,
+            most_useful_agent,
+            str(open_comment)[:500],
+        ])
+        return True
+    except Exception as e:
+        st.error(f"Reflection Survey Error: {e}")
+        return False
+
+
+def fetch_open_response_data(uid: str = None) -> "pd.DataFrame":
+    """
+    Returns open-response data for analysis.
+    Includes DRAFT and REVISED phases for pre-post comparison.
+    Used by researcher_portal for qualitative analysis export.
+    """
+    try:
+        import pandas as pd
+        sh  = get_spreadsheet()
+        df  = pd.DataFrame(sh.worksheet("OpenResponse").get_all_records())
+        if df.empty:
+            return pd.DataFrame()
+        if uid:
+            df = df[df["User_ID"].astype(str).str.upper() == uid.upper()]
+        return df
+    except Exception:
+        return __import__('pandas').DataFrame()
