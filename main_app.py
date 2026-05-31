@@ -13,7 +13,7 @@ import streamlit as st
 import database_manager as db
 
 st.set_page_config(
-    page_title="Chemistry AI-X | MMALE Research Portal",
+    page_title="Saathi Vigyan — AI-Integrated Science Learning",
     page_icon="🧪",
     layout="wide",
 )
@@ -37,10 +37,10 @@ if "current_rep_level" not in st.session_state:
 
 # ── Login screen ──────────────────────────────────────────────────────────────
 if st.session_state.user is None:
-    st.title("🧪 Chemistry AI-X Research Portal")
+    st.title("🧪 Saathi Vigyan | साथी विज्ञान | 사아티 비잔")
     st.markdown(
-        "### Multimodal Multi-Agent Learning Ecology (MMALE)\n"
-        "Evidence-Based Socratic Learning | नेपाली र अंग्रेजी"
+        "### AI-Integrated Scientific Practices for Grade 9 Chemistry\n"
+        "वैज्ञानिक अभ्यासका लागि AI | AI 통합 과학 실천 | Nepal · 네팔"
     )
 
     col1, _ = st.columns([1, 1])
@@ -49,7 +49,7 @@ if st.session_state.user is None:
             "Enter User ID (e.g. STD_1001, T101, R001)"
         ).strip().upper()
 
-    if st.button("Login | लगइन"):
+    if st.button("Login | लगइन | 로그인"):
         user_data = db.check_login(user_id)
         if user_data:
             st.session_state.user = user_data
@@ -64,7 +64,7 @@ else:
     st.sidebar.write(f"**Role:** {role}")
     st.sidebar.write(f"**Group:** {st.session_state.user.get('Group', '—')}")
 
-    if st.sidebar.button("Logout | बाहिरिनुहोस्"):
+    if st.sidebar.button("Logout | बाहिरिनुहोस् | 로그아웃"):
         st.session_state.clear()
         st.rerun()
 
