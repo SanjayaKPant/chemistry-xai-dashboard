@@ -1,6 +1,6 @@
 """
 sandesh_module.py — Sandesh Open-Response Assessment Module
-============================================================
+===========================================================
 Implements the corrected response collection system for Sandesh
 questions (Q15, Q16, Q18) that require constructed responses
 rather than multiple-choice answers.
