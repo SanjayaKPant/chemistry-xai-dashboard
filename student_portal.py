@@ -228,9 +228,9 @@ def render_modules(uid: str, group: str, lang: str = "ne"):
         st.header("📚 Learning Modules")
 
     try:
-        # FIX 1 + 12: use get_spreadsheet() — no new connection per call
         sh = get_spreadsheet()
 
+        # ── Load completed modules for this student ───────────────────────────
         log_df = pd.DataFrame(sh.worksheet("Assessment_Logs").get_all_records())
         finished_modules = []
         if not log_df.empty:
@@ -243,140 +243,186 @@ def render_modules(uid: str, group: str, lang: str = "ne"):
                 .astype(str).str.strip().tolist()
             )
 
+        # ── Load available modules for this group ─────────────────────────────
         m_df = pd.DataFrame(sh.worksheet("Instructional_Materials").get_all_records())
 
-        # Safety: empty sheet or missing header → no modules yet
         if m_df.empty:
             st.info("No modules deployed yet. Please wait for your teacher to add content." if lang == "en"
                     else "모듈이 아직 없습니다. 선생님을 기다려주세요." if lang == "ko"
                     else "अहिलेसम्म कुनै मोड्युल छैन। कृपया शिक्षकको प्रतीक्षा गर्नुहोस्।")
             return
 
-        # Detect group column (handles "Group", "group", spaces)
         group_col = next(
             (c for c in m_df.columns if c.strip().upper() == "GROUP"), None
         )
         if group_col is None:
-            st.warning("Instructional_Materials sheet is missing a 'Group' column. "
-                       "Please check with your administrator.")
+            st.warning("Instructional_Materials sheet is missing a Group column.")
             return
 
-        # Match both new codes (SA/MA/MMALE/CON) AND old names (School A etc.)
-        from config import GROUP_ALIASES, normalise_group
-        aliases = GROUP_ALIASES.get(group, [group])
+        from config import GROUP_ALIASES
+        aliases  = GROUP_ALIASES.get(group, [group])
         available = m_df[
             m_df[group_col].astype(str).str.strip().str.upper().isin(aliases)
-        ]
+        ].reset_index(drop=True)
 
         if available.empty:
             st.warning(f"No modules found for group: {group}")
             return
 
-        # Check if CON student just submitted and needs Tier 5-6 form
-        for _, row in available.iterrows():
-            m_id_check = str(row["Sub_Title"]).strip()
-            if st.session_state.get(f"con_post_{m_id_check}", False):
-                st.session_state[f"con_post_{m_id_check}"] = False
-                render_con_post_form(uid, group, row.to_dict(), lang)
+        # ── FIX 4: Show module progress bar with numbered modules ─────────────
+        total_modules   = len(available)
+        done_count      = sum(
+            1 for _, row in available.iterrows()
+            if str(row["Sub_Title"]).strip() in finished_modules
+        )
+        prog_label = (
+            f"{done_count}/{total_modules} 모듈 완료" if lang == "ko"
+            else f"{done_count}/{total_modules} modules completed" if lang == "en"
+            else f"{done_count}/{total_modules} मोड्युलहरू पूरा"
+        )
+        st.progress(done_count / total_modules if total_modules else 0,
+                    text=prog_label)
+
+        # Module overview pills
+        pill_cols = st.columns(total_modules)
+        for i, (_, row) in enumerate(available.iterrows()):
+            m_sub = str(row["Sub_Title"]).strip()
+            with pill_cols[i]:
+                if m_sub in finished_modules:
+                    st.success(f"M{i+1} ✅")
+                elif done_count == i:
+                    st.warning(f"M{i+1} ▶")
+                else:
+                    st.info(f"M{i+1} 🔒")
+
+        st.markdown("---")
+
+        # ── FIX 2: Check if CON student needs Tier 5-6 form ──────────────────
+        pending_post = st.session_state.get("con_pending_post_module")
+        if pending_post and is_control(group):
+            # Find the module row
+            match_rows = available[
+                available["Sub_Title"].astype(str).str.strip() == pending_post
+            ]
+            if not match_rows.empty:
+                st.session_state["con_pending_post_module"] = None
+                render_con_post_form(uid, group,
+                                     match_rows.iloc[0].to_dict(), lang)
                 return
 
-        active_row = None
-        for _, row in available.iterrows():
+        # ── Find next active module ───────────────────────────────────────────
+        active_row   = None
+        active_index = None
+        for i, (_, row) in enumerate(available.iterrows()):
             if str(row["Sub_Title"]).strip() not in finished_modules:
-                active_row = row
+                active_row   = row
+                active_index = i + 1   # 1-based module number
                 break
 
         if active_row is None:
             if lang == "ko":
-                st.success("🎉 모든 모듈 완료!")
+                st.success("🎉 모든 모듈 완료! 탁월한 과학적 탐구였습니다.")
             elif lang == "ne":
-                st.success("🎉 सबै मोड्युलहरू पूरा भए!")
+                st.success("🎉 सबै मोड्युलहरू पूरा! उत्कृष्ट वैज्ञानिक अनुसन्धान।")
             else:
-                st.success("🎉 All modules complete!")
+                st.success("🎉 All modules complete! Outstanding scientific inquiry.")
+            st.balloons()
             return
 
-        m_id = active_row["Sub_Title"]
-        st.subheader(f"📖 {m_id}")
+        # ── FIX 4: Module number header ───────────────────────────────────────
+        m_id = str(active_row["Sub_Title"]).strip()
+        mod_label = (
+            f"모듈 {active_index}" if lang == "ko"
+            else f"Module {active_index}" if lang == "en"
+            else f"मोड्युल {active_index}"
+        )
+        st.subheader(f"📖 {mod_label}: {m_id}")
+
         with st.expander(
             "Learning Objectives / सिकाइ उद्देश्यहरू / 학습 목표",
             expanded=True
         ):
-            st.write(active_row.get("Objectives", "Explore this concept."))
+            st.write(active_row.get("Learning_Objectives",
+                     active_row.get("Objectives", "Explore this concept.")))
 
-        st.write(f"**{'진단 질문' if lang=='ko' else 'Diagnostic Question' if lang=='en' else 'निदानात्मक प्रश्न'}:**")
+        q_label = (
+            "진단 질문:" if lang == "ko"
+            else "निदानात्मक प्रश्न:" if lang == "ne"
+            else "Diagnostic Question:"
+        )
+        st.markdown(f"**{q_label}**")
         st.write(active_row["Diagnostic_Question"])
 
         opts = [active_row["Option_A"], active_row["Option_B"],
                 active_row["Option_C"], active_row["Option_D"]]
 
-        # Tier labels adapt to language
+        conf_opts = (["추측", "불확실", "확실", "매우 확실"] if lang == "ko"
+                     else ["Guessing", "Unsure", "Sure", "Very Sure"])
+
         t1_label = ("귀하의 답 (Tier 1):" if lang == "ko"
-                    else "तपाईंको उत्तर (Tier 1 Choice):" if lang == "ne"
+                    else "तपाईंको उत्तर (Tier 1):" if lang == "ne"
                     else "Your Answer (Tier 1):")
         t2_label = ("자신감 (Tier 2):" if lang == "ko"
                     else "आत्मविश्वास (Tier 2):" if lang == "ne"
                     else "Confidence in answer (Tier 2):")
-        t3_label = ("이 답을 선택한 이유 (Tier 3):" if lang == "ko"
-                    else "तपाईंले किन यो उत्तर रोज्नुभयो? (Tier 3 Reasoning):" if lang == "ne"
-                    else "Why did you choose this answer? (Tier 3 Reasoning):")
-        t4_label = ("추론에 대한 자신감 (Tier 4):" if lang == "ko"
+        t3_label = ("이유 (Tier 3):" if lang == "ko"
+                    else "किन? (Tier 3 Reasoning):" if lang == "ne"
+                    else "Why did you choose this? (Tier 3 Reasoning):")
+        t4_label = ("추론 자신감 (Tier 4):" if lang == "ko"
                     else "तर्कमा आत्मविश्वास (Tier 4):" if lang == "ne"
-                    else "Confidence in your reasoning (Tier 4):")
-        conf_opts = (["추측", "불확실", "확실", "매우 확실"] if lang == "ko"
-                     else ["Guessing", "Unsure", "Sure", "Very Sure"])
+                    else "Confidence in reasoning (Tier 4):")
 
-        t1 = st.radio(t1_label, opts, key=f"t1_{m_id}")
-        t2 = st.select_slider(t2_label, conf_opts, key=f"t2_{m_id}")
-        t3 = st.text_area(t3_label, key=f"t3_{m_id}")
-        t4 = st.select_slider(t4_label, conf_opts, key=f"t4_{m_id}")
+        # Use module-specific keys to avoid widget conflicts across modules
+        t1 = st.radio(t1_label, opts, key=f"t1_{m_id}_{active_index}")
+        t2 = st.select_slider(t2_label, conf_opts, key=f"t2_{m_id}_{active_index}")
+        t3 = st.text_area(t3_label, key=f"t3_{m_id}_{active_index}")
+        t4 = st.select_slider(t4_label, conf_opts, key=f"t4_{m_id}_{active_index}")
 
-        btn_label = ("제출 및 토론 시작" if lang == "ko"
+        btn_label = ("제출" if lang == "ko"
                      else "Submit & Start Discussion" if lang == "en"
-                     else "पेश गर्नुहोस् र छलफल सुरु गर्नुहोस्")
+                     else "पेश गर्नुहोस्")
 
-        if st.button(btn_label):
+        if st.button(btn_label, type="primary", key=f"submit_{m_id}_{active_index}"):
             if len(t3.strip()) < 5:
-                err = ("추론을 입력해주세요." if lang == "ko"
-                       else "❌ Please provide reasoning."
-                       if lang == "en" else "❌ कृपया तर्क प्रदान गर्नुहोस्।")
-                st.error(err)
+                st.error("❌ Please write at least one sentence of reasoning / "
+                         "कृपया कम्तीमा एक वाक्य तर्क लेख्नुहोस्।")
+                return
+
+            # FIX 1: Double-log guard using module-specific key
+            log_key = f"logged_initial_{uid}_{m_id}"
+            if not st.session_state.get(log_key, False):
+                log_assessment(uid, group, m_id, t1, t2, t3, t4,
+                               "INITIAL", get_nepal_time())
+                st.session_state[log_key] = True
+
+            context = {
+                "topic":         m_id,
+                "t1":            t1,
+                "t3":            t3,
+                "socratic_tree": str(active_row.get("Socratic_Tree", "")),
+                "lang":          lang,
+                "module_num":    active_index,
+            }
+            st.session_state.active_module     = active_row.to_dict()
+            st.session_state.active_agent      = "SAATHI"
+            st.session_state.saathi_messages   = initialise_agent("SAATHI", context)
+            st.session_state.agent_context     = context
+            st.session_state.current_tap_level = "TAP_1"
+            st.session_state.current_rep_level = "MONADIC"
+            st.session_state.agent_completed   = {}
+            st.session_state.mastery_triggered = False
+
+            for key in ["khoji", "praman", "tarka", "rupak", "sandesh"]:
+                st.session_state[f"{key}_messages"] = None
+                st.session_state[f"{key}_turn"]     = 0
+
+            if is_control(group):
+                # FIX 2: Store pending post module and stay in Learning Modules
+                st.session_state["con_pending_post_module"] = m_id
+                st.session_state.current_tab = "📚 Learning Modules"
             else:
-                # Guard against double-logging on rerun
-                already_logged = st.session_state.get(f"submitted_{m_id}", False)
-                if not already_logged:
-                    log_assessment(uid, group, m_id, t1, t2, t3, t4,
-                                   "INITIAL", get_nepal_time())
-                    st.session_state[f"submitted_{m_id}"] = True
-
-                context = {
-                    "topic":         m_id,
-                    "t1":            t1,
-                    "t3":            t3,
-                    "socratic_tree": str(active_row.get("Socratic_Tree", "")),
-                    "lang":          lang,
-                }
-                st.session_state.active_module     = active_row.to_dict()
-                st.session_state.active_agent      = "SAATHI"
-                st.session_state.saathi_messages   = initialise_agent("SAATHI", context)
-                st.session_state.agent_context     = context
-                st.session_state.current_tap_level = "TAP_1"
-                st.session_state.current_rep_level = "MONADIC"
-                st.session_state.agent_completed   = {}
-                st.session_state.mastery_triggered = False
-
-                # Initialise all message keys to None
-                for key in ["khoji", "praman", "tarka", "rupak", "sandesh"]:
-                    st.session_state[f"{key}_messages"] = None
-                    st.session_state[f"{key}_turn"]     = 0
-
-                # CON group stays in modules for Tier 5-6 revision form
-                # Other groups go to Saathi AI
-                if is_control(group):
-                    st.session_state.current_tab = "📚 Learning Modules"
-                    st.session_state[f"con_post_{m_id}"] = True
-                else:
-                    st.session_state.current_tab = AGENT_TAB_MAP["SAATHI"]
-                st.rerun()
+                st.session_state.current_tab = AGENT_TAB_MAP["SAATHI"]
+            st.rerun()
 
     except Exception as e:
         st.error(f"Error loading modules: {e}")
@@ -388,11 +434,15 @@ def render_modules(uid: str, group: str, lang: str = "ne"):
 
 def render_con_post_form(uid: str, group: str, module: dict, lang: str):
     """
-    Control group students complete Tiers 5-6 without AI interaction.
-    They receive a printed study guide (teacher-provided) and then
-    submit their revised answer. This preserves the pre/post structure
-    for comparison with AI groups.
+    CON group: Tiers 5-6 revision form (no AI).
+    FIX: unique form key per module prevents key collision.
+    FIX: after saving → return to Learning Modules (not Dashboard)
+         so next module appears immediately.
+    FIX: T5 and T6 are passed correctly to log_assessment.
+    FIX: balloons on completion.
     """
+    m_id = str(module.get("Sub_Title", "")).strip()
+
     if lang == "ko":
         st.success("✅ 진단 답변이 기록되었습니다.")
         st.info("교사가 제공한 학습 자료를 검토한 후 아래에서 최종 답변을 제출하세요.")
@@ -401,44 +451,67 @@ def render_con_post_form(uid: str, group: str, module: dict, lang: str):
         st.info("शिक्षकले दिएको अध्ययन सामग्री हेरेपछि तलको अन्तिम उत्तर पेश गर्नुहोस्।")
     else:
         st.success("✅ Diagnostic answer recorded.")
-        st.info("After reviewing the study materials provided by your teacher, "
-                "submit your final answer below.")
+        st.info("Review the study materials your teacher provided, "
+                "then submit your revised answer below (Tiers 5 & 6).")
 
-    with st.form("con_post_form"):
-        opts = [module["Option_A"], module["Option_B"],
-                module["Option_C"], module["Option_D"]]
-        conf_opts = (["추측", "불확실", "확실", "매우 확실"] if lang == "ko"
-                     else ["Guessing", "Unsure", "Sure", "Very Sure"])
+    opts = [module.get("Option_A",""), module.get("Option_B",""),
+            module.get("Option_C",""), module.get("Option_D","")]
+    conf_opts = (["추측","불확실","확실","매우 확실"] if lang == "ko"
+                 else ["Guessing","Unsure","Sure","Very Sure"])
 
+    # FIX: unique form key per module avoids widget key collision
+    form_key = f"con_post_form_{m_id}"
+
+    with st.form(form_key):
         t5 = st.radio(
             "최종 선택 (Tier 5):" if lang == "ko"
-            else "Final Choice (Tier 5):" if lang == "en"
-            else "अन्तिम विकल्प (Tier 5):", opts
+            else "अन्तिम विकल्प (Tier 5):" if lang == "ne"
+            else "Revised Answer (Tier 5):", opts,
+            key=f"t5_radio_{m_id}",
         )
         t6 = st.select_slider(
             "최종 자신감 (Tier 6):" if lang == "ko"
-            else "Final Confidence (Tier 6):" if lang == "en"
-            else "अन्तिम आत्मविश्वास (Tier 6):", conf_opts
+            else "अन्तिम आत्मविश्वास (Tier 6):" if lang == "ne"
+            else "Confidence in revised answer (Tier 6):", conf_opts,
+            key=f"t6_slider_{m_id}",
         )
         reflection = st.text_area(
-            "학습 후 생각이 어떻게 바뀌었나요?" if lang == "ko"
-            else "What changed in your thinking after studying?" if lang == "en"
-            else "अध्ययनपछि तपाईंको सोच कसरी परिवर्तन भयो?"
+            "무엇이 바뀌었나요?" if lang == "ko"
+            else "अध्ययनपछि तपाईंको सोच कसरी परिवर्तन भयो?" if lang == "ne"
+            else "What changed in your thinking after reviewing the material?",
+            key=f"reflection_{m_id}",
         )
 
-        lbl = ("저장 및 완료" if lang == "ko"
-               else "Save & Complete" if lang == "en"
-               else "सुरक्षित गर्नुहोस् र पूरा गर्नुहोस्")
-        if st.form_submit_button(lbl):
-            log_assessment(
-                uid, group, module["Sub_Title"],
-                "N/A", "N/A", reflection, "N/A",
-                "POST", get_nepal_time(), t5, t6
-            )
-            st.session_state.active_module     = None
-            st.session_state.mastery_triggered = False
-            st.session_state.current_tab       = "🏠 Dashboard"
-            st.rerun()
+        lbl = ("저장 및 다음 모듈" if lang == "ko"
+               else "सुरक्षित र अर्को मोड्युल" if lang == "ne"
+               else "Save & Continue to Next Module")
+
+        if st.form_submit_button(lbl, type="primary"):
+            if len(reflection.strip()) < 3:
+                st.error("Please write at least one word about what changed.")
+            else:
+                # FIX 1: Guard double-log for POST
+                post_key = f"logged_post_{uid}_{m_id}"
+                if not st.session_state.get(post_key, False):
+                    # FIX: pass t5 and t6 explicitly — they ARE recorded now
+                    ok = log_assessment(
+                        uid, group, m_id,
+                        "N/A", "N/A", reflection, "N/A",
+                        "POST", get_nepal_time(),
+                        t5, t6          # ← T5 and T6 correctly passed
+                    )
+                    if ok:
+                        st.session_state[post_key] = True
+
+                # FIX 3: Balloons on module completion
+                st.balloons()
+
+                # FIX 2: Go back to Learning Modules (not Dashboard)
+                # so the next module appears immediately
+                st.session_state.active_module     = None
+                st.session_state.mastery_triggered = False
+                st.session_state.current_tab       = "📚 Learning Modules"
+                st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # UNIFIED AGENT CHAT RENDERER
